@@ -196,7 +196,7 @@ class Middleware:
     def after_model(self, ctx: RunContext) -> None: ...        # 模型调用后
     def before_tool(self, ctx: RunContext) -> None: ...        # 工具调用前
     def after_tool(self, ctx: RunContext) -> None: ...         # 工具调用后
-    def before_session_end(self, ctx: RunContext) -> None: ... # 会话结束前
+    def on_session_end(self, ctx: RunContext) -> None: ...     # 会话结束前
 
     # —— 2 个环绕（wrap）钩子，默认透传 ——
     def wrap_model_call(self, ctx: RunContext, handler: ModelHandler) -> AIMessage:
@@ -288,7 +288,7 @@ while ctx.stop_reason is None:
         ctx.state.messages.append(result); ctx.current_tool_result = result
         _fire("after_tool", ctx)               # 工具调用后
 
-_fire("before_session_end", ctx)               # 会话结束前（清理钩子）
+_fire("on_session_end", ctx)                   # 会话结束前（清理钩子）
 return _final_text(ctx)        # 正常→最后一条 AIMessage.content；异常中止→兜底提示
 ```
 

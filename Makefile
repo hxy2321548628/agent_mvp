@@ -13,10 +13,11 @@ install:  ## 同步依赖（含 dev 组）
 test:  ## 运行测试（带覆盖率报告）
 	uv run pytest
 
-format:  ## 代码格式化（ruff）
+check:  ## 代码格检查修复（ruff）
 	uv run ruff check --fix
 
-check: format test  ## 阶段完成门禁： 格式检查 + 测试
+format:  ## 代码格式化
+	uv run ruff format
 
 clean:  ## 清理缓存与覆盖率产物
 	rm -rf .pytest_cache .ruff_cache .coverage
