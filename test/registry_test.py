@@ -1,0 +1,73 @@
+"""tool/registry 模块测试：to_schema 含已注册工具、execute 逻辑错包装 / infra 错上抛。"""
+
+import pytest
+
+from src.message import ToolMessage
+from src.tool.base import ToolInfraError
+from src.tool.calculator import CalculatorArgs, CalculatorTool
+from src.tool.registry import ToolRegistry
+
+
+class _FlakyTool:
+    """always raises ToolInfraError，用于验证 infra 错误上抛。"""
+
+    name = "flaky"
+    description = "总是抛 infra 错误"
+    args_model = CalculatorArgs
+
+    def run(self, args: CalculatorArgs) -> str:
+        raise ToolInfraError("timeout")
+
+
+def _registry_with_calculator() -> ToolRegistry:
+    registry = ToolRegistry()
+    registry.register(CalculatorTool())
+    return registry
+
+
+def test_to_schema_includes_registered_tool() -> None:
+    """to_schema 应以 function calling 格式暴露已注册工具及其参数。"""
+    schema = _registry_with_calculator().to_schema()
+    assert len(schema) == 1
+    fn = schema[0]
+    assert fn["type"] == "function"
+    assert fn["function"]["name"] == "calculator"
+    assert "expression" in fn["function"]["parameters"]["properties"]
+
+
+def test_execute_runs_tool_and_returns_tool_message() -> None:
+    """execute 校验参数并调 run，成功时返回非错误 ToolMessage。"""
+    msg = _registry_with_calculator().execute("calculator", {"expression": "2+3"}, "c1")
+    assert isinstance(msg, ToolMessage)
+    assert msg.content == "5"
+    assert msg.is_error is False
+    assert msg.tool_call_id == "c1"
+
+
+def test_execute_unknown_tool_returns_is_error() -> None:
+    """未知工具属逻辑错误，应回灌 is_error ToolMessage 而非抛出。"""
+    msg = ToolRegistry().execute("nope", {}, "c1")
+    assert msg.is_error is True
+    assert "nope" in msg.content
+    assert msg.tool_call_id == "c1"
+
+
+def test_execute_invalid_args_returns_is_error() -> None:
+    """参数不匹配 schema 属逻辑错误，应回灌 is_error。"""
+    msg = _registry_with_calculator().execute("calculator", {}, "c1")
+    assert msg.is_error is True
+    assert msg.tool_call_id == "c1"
+
+
+def test_execute_logic_error_is_wrapped_not_raised() -> None:
+    """工具内部的逻辑异常（除零）应被包成 is_error 回灌，不上抛。"""
+    msg = _registry_with_calculator().execute("calculator", {"expression": "1/0"}, "c1")
+    assert msg.is_error is True
+
+
+def test_execute_propagates_tool_infra_error() -> None:
+    """infra 错误应原样上抛，交由 wrap_tool_call 重试。"""
+    registry = ToolRegistry()
+    registry.register(_FlakyTool())
+    with pytest.raises(ToolInfraError):
+        registry.execute("flaky", {"expression": "1"}, "c1")
