@@ -345,11 +345,14 @@ class DeepSeekClient:
         本项目用 SDK 接管"schema 注入 + 结构化解码"以求稳定; 仍自行完成
         SDK 结构 → 内部 ToolCall/AIMessage 的映射, 及 思考/动作/答案 的区分。
     """
-    def __init__(self, api_key: str, base_url: str, model: str): ...
+    def __init__(self, client: OpenAI, model: str): ...                 # 注入 SDK 客户端（依赖倒置，便于离线打桩测试）
+    @classmethod
+    def from_credentials(cls, api_key, base_url, model) -> Self: ...      # 组合根(CLI)便捷构造: 自建 OpenAI 客户端后注入
     def chat(self, messages, tools, on_token=None) -> AIMessage: ...
 ```
 
-> 解析职责仍在我们手里：`message.content` → 思考/答案；`message.tool_calls[].function.arguments`（字符串 JSON）→ `json.loads` 成 `ToolCall.arguments`，并处理参数非法 JSON 的异常。
+> 依赖倒置：把 `OpenAI` 实例**注入**而非在 `__init__` 内自建——业务依赖抽象、不依赖具体 SDK，离线测试可注入打桩客户端（构造真实 SDK 会触发 httpx 代理探测等副作用）。
+> 解析职责仍在我们手里：`message.content` → 思考/答案；`message.tool_calls[].function.arguments`（字符串 JSON）→ `json.loads` 成 `ToolCall.arguments`，参数非法 JSON 时回退 `{}` 交由 `registry.execute` 的 schema 校验回灌（见 [§11](#11-异常处理与-trace)）。
 
 ### 7.3 流式输出（同步，不引入 asyncio）
 

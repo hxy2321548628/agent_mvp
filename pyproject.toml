@@ -24,7 +24,10 @@ dev = [
 testpaths = ["test"]                             # 测试目录
 python_files = ["*_test.py"]                     # 测试文件命名：{module}_test.py
 pythonpath = ["."]                               # 仓库根加入 sys.path，便于 import src / cli
-addopts = "--cov=src --cov-report=term-missing"  # 默认输出覆盖率报告
+addopts = '--cov=src --cov-report=term-missing -m "not slow"'  # 输出覆盖率；默认跳过 @slow 真实 API 用例
+markers = [
+    "slow: 真实外部 API 冒烟测试（默认跳过，用 `-m slow` 显式触发，需 DEEPSEEK_API_KEY）",
+]
 
 
 # 配置代码规范
