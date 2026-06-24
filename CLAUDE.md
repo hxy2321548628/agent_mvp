@@ -20,6 +20,8 @@ This is a project to implement a minimum viable Agent (ReAct) that can use web s
 
 ### 6. @cli/ Client, using the agent in @src
 
+### 7. Use mermaid to draw flowcharts
+
 ---
 
 ## Standards Files

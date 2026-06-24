@@ -1,13 +1,34 @@
 # Agent Package
 
-最小可用智能体库
+The minimum-viable agent runtime library. Design: see @doc/DDD.md.
 
+This agent is **"main loop + lifecycle middleware"** — borrowing LangGraph's runtime
+lifecycle stages and LangChain's middleware abstraction. It is the agent itself, not a
+framework for building agents, so there are **no graph/node abstractions**.
+
+## Layout
+
+> Singular names; key parameters live in `config.py`, never hardcoded inside functions.
+
+- `message.py` / `state.py` — message types; `AgentState` (persisted) + `RunContext` (per-run).
+- `llm/` — `LLMClient` protocol + DeepSeek implementation (function calling, streaming).
+- `tool/` — `Tool` protocol, `ToolRegistry`, and the concrete tools.
+- `middleware/` — `Middleware` base (6 lifecycle hooks + 2 wrap hooks) and concrete middleware.
+- `runtime.py` — `AgentRuntime`: the ReAct main loop that fires the lifecycle hooks.
+- `session/` — `Checkpointer` + `SessionManager` (per-`thread_id` isolation & persistence).
+- `agent.py` — top-level `Agent`; wires everything and exposes `run(thread_id, user_input)`.
+
+## Extension Points (Open/Closed)
+
+- **New tool**: implement the `Tool` protocol and register it to `ToolRegistry` — do not touch runtime or middleware.
+- **New runtime concern** (logging, compression, retry, …): add a `Middleware` subclass and register it in the middleware list — do not modify the main loop or existing middleware.
+- **New LLM provider**: implement the `LLMClient` protocol and inject it.
 
 ---
 
 ## SOLID Design Principles
 
-> From TTD Section 2.4. **S** and **D** are strictly enforced; **O** is partially enforced; **L** and **I** are not enforced initially.
+> **S** and **D** are strictly enforced; **O** is partially enforced; **L** and **I** are not enforced initially.
 
 ### S — Single Responsibility Strictly Enforced
 
@@ -22,10 +43,6 @@ Business logic depends on abstractions, not concrete implementations. Concrete i
 ### O — Open/Closed (Partially Enforced)
 
 Extend via new code; do not modify existing code to add features.
-
-1. **New tool**: implement the tool `Protocol`, register to the tool list — **do not touch existing node code**.
-2. **New WebSocket message type**: add a handler and register it in the `type → handler` dispatch table — **do not modify existing if/else branches**.
-3. **New LangGraph node**: create a new node and wire it into the graph edges — **do not modify existing node implementations**.
 
 ### L / I — Not enforced initially
 
