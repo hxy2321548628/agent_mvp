@@ -50,7 +50,7 @@ P2 是枢纽（走通骨架）；P3–P6 完成骨架后可较独立推进，在
 | 项 | 内容 |
 |---|---|
 | 目标 | 项目可跑起来、依赖齐、密钥可读 |
-| 任务 | 补依赖（`pytest`、`pytest-cov`）；按 [DDD §3](DDD.md) 建空包骨架；`config.py`：顶层参数（`DEFAULT_MODEL=deepseek-chat`、`DEFAULT_BASE_URL=https://api.deepseek.com`、`MAX_TURN`、`MAX_MSG`、`KEEP_RECENT`、`STREAM`）+ `Settings`（读 `.env`：`DEEPSEEK_API_KEY` 等）；`.env.example` |
+| 任务 | 补依赖（`pytest`、`pytest-cov`）；按 [DDD §3](DDD.md) 建空包骨架；`config.py`：顶层参数（`DEFAULT_MODEL=deepseek-v4-flash`、`DEFAULT_BASE_URL=https://api.deepseek.com`、`MAX_TURN`、`MAX_MSG`、`KEEP_RECENT`、`STREAM`）+ `Settings`（读 `.env`：`DEEPSEEK_API_KEY` 等）；`.env.example` |
 | 先写的测试 | `Settings` 能从环境变量加载；包可 import |
 | 完成标准 | `uv run pytest` 能跑（≥1 测试）；`ruff` 干净；`.env` 不入库 |
 
