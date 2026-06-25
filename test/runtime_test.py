@@ -7,7 +7,7 @@ from src.message import AIMessage, HumanMessage, Message, ToolCall
 from src.middleware.base import Middleware
 from src.middleware.max_turn import MaxTurnMiddleware
 from src.runtime import FALLBACK_TEXT, AgentRuntime
-from src.state import AgentState, RunContext
+from src.state import AgentState, Event, RunContext
 from src.tool.base import ToolInfraError
 from src.tool.calculator import CalculatorArgs, CalculatorTool
 from src.tool.registry import ToolRegistry
@@ -25,9 +25,36 @@ class FakeLLMClient:
         messages: list[Message],
         tools: list[dict[str, object]] | None,
         on_token: Callable[[str], None] | None = None,
+        on_reasoning: Callable[[str], None] | None = None,
+        reasoning: bool = False,
     ) -> AIMessage:
         response = self._responses[min(self.calls, len(self._responses) - 1)]
         self.calls += 1
+        return response
+
+
+class StreamingFakeLLM:
+    """流式桩：按次序返回预设 AIMessage，同时把 content 喂 on_token；reasoning 开时喂 on_reasoning。"""
+
+    def __init__(self, responses: list[AIMessage], reasoning_text: str = "") -> None:
+        self._responses = responses
+        self._reasoning_text = reasoning_text
+        self.calls = 0
+
+    def chat(
+        self,
+        messages: list[Message],
+        tools: list[dict[str, object]] | None,
+        on_token: Callable[[str], None] | None = None,
+        on_reasoning: Callable[[str], None] | None = None,
+        reasoning: bool = False,
+    ) -> AIMessage:
+        response = self._responses[min(self.calls, len(self._responses) - 1)]
+        self.calls += 1
+        if reasoning and on_reasoning is not None and self._reasoning_text:
+            on_reasoning(self._reasoning_text)
+        if on_token is not None and response.content:
+            on_token(response.content)
         return response
 
 
@@ -200,6 +227,37 @@ def test_e2e_calculate_12_times_8() -> None:
     result = _runtime(llm, _calculator_registry()).run(ctx)
     assert "96" in result
     assert ctx.state.messages[2].content == "96"
+
+
+def test_runtime_emits_events_per_channel_when_on_event_set() -> None:
+    """有 on_event 时：思考→reasoning、工具返回→tool_result、答案→answer 三通道都被喂出。"""
+    events: list[Event] = []
+    llm = StreamingFakeLLM(
+        [
+            AIMessage(content="先算一下", tool_calls=[_tool_call("12*8")]),
+            AIMessage(content="结果是 96"),
+        ],
+        reasoning_text="让我想想",
+    )
+    ctx = _ctx("算 12*8")
+    ctx.on_event = events.append
+    ctx.reasoning = True
+    _runtime(llm, _calculator_registry()).run(ctx)
+    kinds = [e.kind for e in events]
+    assert "reasoning" in kinds and "tool_result" in kinds and "answer" in kinds
+    assert any(e.kind == "tool_result" and e.text == "96" for e in events)
+
+
+def test_runtime_emits_no_reasoning_event_when_reasoning_off() -> None:
+    """推理关时不喂 reasoning 事件，但答案仍走 answer 通道。"""
+    events: list[Event] = []
+    llm = StreamingFakeLLM([AIMessage(content="直接回答")], reasoning_text="不该出现")
+    ctx = _ctx("你好")
+    ctx.on_event = events.append
+    ctx.reasoning = False
+    _runtime(llm).run(ctx)
+    assert all(e.kind != "reasoning" for e in events)
+    assert any(e.kind == "answer" for e in events)
 
 
 class _InfraFailTool:

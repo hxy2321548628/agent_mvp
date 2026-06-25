@@ -5,7 +5,7 @@
 中间件顺序：SessionPrefix → Log → Trace → MaxTurn → Context → Approval → Retry。
 """
 
-from cli.repl import Repl, Toggles, confirm_tool_call, make_trace_sink
+from cli.repl import Repl, Toggles, ToolApproval, make_trace_sink
 from src.agent import Agent
 from src.config import BACKOFF, DANGER_PATTERN, KEEP_RECENT, LOG_DIR, LOG_NAME_MAXLEN, MAX_MSG, MAX_RETRY, MAX_TURN, STREAM, Settings
 from src.llm.deepseek_client import DeepSeekClient
@@ -59,7 +59,7 @@ def build_agent(settings: Settings, toggles: Toggles) -> tuple[Agent, SessionMan
         TraceMiddleware(sink=make_trace_sink(toggles)),
         MaxTurnMiddleware(max_turn=MAX_TURN),
         ContextMiddleware(llm=llm, max_msg=MAX_MSG, keep_recent=KEEP_RECENT),
-        ApprovalMiddleware(requires_approval=registry.requires_approval, confirm=confirm_tool_call, danger_pattern=DANGER_PATTERN),
+        ApprovalMiddleware(requires_approval=registry.requires_approval, confirm=ToolApproval(), danger_pattern=DANGER_PATTERN),
         RetryMiddleware(max_retry=MAX_RETRY, backoff=BACKOFF),
     ]
     runtime = AgentRuntime(llm=llm, registry=registry, middlewares=middlewares, settings=settings)

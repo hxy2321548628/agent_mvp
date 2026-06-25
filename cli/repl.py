@@ -6,11 +6,15 @@
 from collections.abc import Callable
 from dataclasses import dataclass
 
+from rich.console import Console
+
 from cli.command import parse_command
-from cli.config import DEFAULT_THREAD, GOODBYE, HELP, PROMPT, WELCOME
+from cli.config import APPROVE_PROMPT, DEFAULT_THREAD, GOODBYE, HELP, PROMPT, WELCOME
+from cli.render import Renderer
 from src.agent import Agent
 from src.message import ToolCall
 from src.session.manager import SessionManager
+from src.state import Event
 
 
 @dataclass
@@ -19,16 +23,26 @@ class Toggles:
 
     trace_on: bool = False
     stream_on: bool = True
+    think_on: bool = False
 
 
-def _print_token(token: str) -> None:
-    print(token, end="", flush=True)
+class ToolApproval:
+    """HITL 三选项授权：允许[y] / 拒绝[n] / 总是允许[a]；选「总是允许」记住该工具，本会话内不再询问。"""
 
+    def __init__(self, console: Console | None = None, ask: Callable[[str], str] = input) -> None:
+        self._console = console or Console()
+        self._ask = ask
+        self._always: set[str] = set()  # 已「总是允许」的工具名（会话级）
 
-def confirm_tool_call(call: ToolCall) -> bool:
-    """终端征询工具授权：输入 y/yes 允许，其它一律拒绝（P13 升级为彩色可选项）。"""
-    answer = input(f"⚠ 授权工具 {call.name} {call.arguments}？[y/N] ")
-    return answer.strip().lower() in {"y", "yes"}
+    def __call__(self, call: ToolCall) -> bool:
+        if call.name in self._always:
+            return True
+        self._console.print(f"[bold yellow]⚠ 授权工具 {call.name} {call.arguments}[/]")
+        answer = self._ask(APPROVE_PROMPT).strip().lower()
+        if answer in {"a", "always", "总是允许"}:
+            self._always.add(call.name)
+            return True
+        return answer in {"y", "yes", "允许"}
 
 
 def make_trace_sink(toggles: Toggles) -> Callable[[str], None]:
@@ -42,7 +56,7 @@ def make_trace_sink(toggles: Toggles) -> Callable[[str], None]:
 
 
 class Repl:
-    """读取命令、维护当前窗口与开关、驱动 Agent。所有展示经注入的 out / token sink。"""
+    """读取命令、维护当前窗口与开关、驱动 Agent。命令回执经 out；对话四通道经 render(Event)。"""
 
     def __init__(
         self,
@@ -50,14 +64,14 @@ class Repl:
         session: SessionManager,
         toggles: Toggles,
         out: Callable[[str], None] = print,
-        token: Callable[[str], None] = _print_token,
+        render: Callable[[Event], None] | None = None,
         default_thread: str = DEFAULT_THREAD,
     ) -> None:
         self._agent = agent
         self._session = session
         self._toggles = toggles
         self._out = out
-        self._token = token
+        self._render = render or Renderer().render
         self._thread = default_thread
         self._counter = 1
         self.running = True
@@ -73,6 +87,7 @@ class Repl:
             "list": self._list,
             "trace": self._trace,
             "stream": self._stream,
+            "think": self._think,
             "help": self._help,
             "quit": self._quit,
             "unknown": self._unknown,
@@ -85,9 +100,12 @@ class Repl:
         text = arg.strip()
         if not text:
             return ""
-        on_token = self._token if self._toggles.stream_on else None
-        answer = self._agent.run(self._thread, text, on_token=on_token)
-        return "" if self._toggles.stream_on else answer  # 流式时已逐字打印，留空换行收尾
+        self._render(Event(kind="user", text=text))  # 回显用户输入到「用户」通道
+        on_event = self._render if self._toggles.stream_on else None  # 流式：四通道实时渲染
+        answer = self._agent.run(self._thread, text, on_event=on_event, reasoning=self._toggles.think_on)
+        if not self._toggles.stream_on:  # 非流式：把最终答案作为一条 answer 事件渲染
+            self._render(Event(kind="answer", text=answer))
+        return ""
 
     def _new(self, arg: str) -> str:
         if arg:
@@ -119,6 +137,10 @@ class Repl:
     def _stream(self, arg: str) -> str:
         self._toggles.stream_on = not self._toggles.stream_on
         return f"stream 已{'开启' if self._toggles.stream_on else '关闭'}"
+
+    def _think(self, arg: str) -> str:
+        self._toggles.think_on = not self._toggles.think_on
+        return f"think 已{'开启' if self._toggles.think_on else '关闭'}"
 
     def _help(self, arg: str) -> str:
         return HELP

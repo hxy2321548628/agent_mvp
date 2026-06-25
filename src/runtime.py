@@ -4,11 +4,13 @@
 环绕钩子按洋葱嵌套包住真实调用：中间件列表首个在最外层（与顺序钩子"先注册先执行"一致）。
 """
 
+from collections.abc import Callable
+
 from src.config import Settings
 from src.llm.base import LLMClient
 from src.message import AIMessage, ToolMessage
 from src.middleware.base import Middleware, ModelHandler, ToolHandler
-from src.state import RunContext
+from src.state import Event, RunContext
 from src.tool.base import ToolInfraError
 from src.tool.registry import ToolRegistry
 
@@ -54,6 +56,8 @@ class AgentRuntime:
                 result = ToolMessage(content=str(exc), tool_call_id=call.id, is_error=True)
             ctx.state.messages.append(result)
             ctx.current_tool_result = result
+            if ctx.on_event is not None:  # 工具返回作为「tool_result」通道喂给 CLI 分区渲染
+                ctx.on_event(Event(kind="tool_result", text=result.content))
             self._fire("after_tool", ctx)
 
     def _fire(self, phase: str, ctx: RunContext) -> None:
@@ -65,12 +69,21 @@ class AgentRuntime:
         """用 wrap_model_call 洋葱包住真实 llm.chat（列表首个在最外层）。"""
 
         def base(c: RunContext) -> AIMessage:
-            return self._llm.chat(c.state.messages, c.tools_schema, c.on_token)
+            on_token, on_reasoning = self._stream_sinks(c)
+            return self._llm.chat(c.state.messages, c.tools_schema, on_token, on_reasoning, c.reasoning)
 
         handler: ModelHandler = base
         for mw in reversed(self._middlewares):
             handler = self._wrap_model(mw, handler)
         return handler(ctx)
+
+    @staticmethod
+    def _stream_sinks(ctx: RunContext) -> tuple[Callable[[str], None] | None, Callable[[str], None] | None]:
+        """决定答案/思考两路流式 sink：有 on_event 则桥接成 answer/reasoning 事件，否则回退 on_token（兼容）。"""
+        if ctx.on_event is not None:
+            on_event = ctx.on_event
+            return (lambda t: on_event(Event(kind="answer", text=t)), lambda t: on_event(Event(kind="reasoning", text=t)))
+        return ctx.on_token, None
 
     def _tool_chain(self, ctx: RunContext) -> ToolMessage:
         """用 wrap_tool_call 洋葱包住真实 registry.execute（列表首个在最外层）。"""

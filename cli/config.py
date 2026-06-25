@@ -10,6 +10,7 @@ DEFAULT_THREAD = "w1"  # 启动时的默认窗口（thread_id）
 PROMPT = "» "  # 输入提示符
 WELCOME = "ReAct Agent CLI —— 直接输入消息对话，:help 查看命令。"
 GOODBYE = "再见。"
+APPROVE_PROMPT = "允许[y] / 拒绝[n] / 总是允许[a]："  # HITL 工具授权三选项提示
 HELP = (
     "命令：\n"
     "  :new [id]      开新窗口（缺省自动命名）\n"
@@ -17,6 +18,7 @@ HELP = (
     "  :list          列出全部窗口（* 标记当前）\n"
     "  :trace         开关执行/工具日志\n"
     "  :stream        开关流式输出\n"
+    "  :think         开关推理（思考）模式\n"
     "  :help          显示本帮助\n"
     "  :quit / :exit  退出"
 )

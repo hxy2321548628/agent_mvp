@@ -23,7 +23,14 @@ class _ScriptedLLM:
         self._replies = list(replies)
         self.seen_lengths: list[int] = []
 
-    def chat(self, messages: list[Message], tools: list[dict[str, object]] | None, on_token: Callable[[str], None] | None = None) -> AIMessage:
+    def chat(
+        self,
+        messages: list[Message],
+        tools: list[dict[str, object]] | None,
+        on_token: Callable[[str], None] | None = None,
+        on_reasoning: Callable[[str], None] | None = None,
+        reasoning: bool = False,
+    ) -> AIMessage:
         self.seen_lengths.append(len(messages))
         return self._replies.pop(0)
 
@@ -86,7 +93,14 @@ def test_run_threads_on_token_to_llm() -> None:
     received: list[Callable[[str], None] | None] = []
 
     class _Capturing:
-        def chat(self, messages: list[Message], tools: list[dict[str, object]] | None, on_token: Callable[[str], None] | None = None) -> AIMessage:
+        def chat(
+            self,
+            messages: list[Message],
+            tools: list[dict[str, object]] | None,
+            on_token: Callable[[str], None] | None = None,
+            on_reasoning: Callable[[str], None] | None = None,
+            reasoning: bool = False,
+        ) -> AIMessage:
             received.append(on_token)
             return AIMessage(content="ok")
 
@@ -98,11 +112,43 @@ def test_run_threads_on_token_to_llm() -> None:
     assert received == [sink]
 
 
+def test_run_threads_on_event_and_reasoning_to_llm() -> None:
+    """on_event 经运行时桥接成非空 answer/reasoning sink，reasoning 开关透传到 llm.chat。"""
+    seen: dict[str, object] = {}
+
+    class _Capturing:
+        def chat(
+            self,
+            messages: list[Message],
+            tools: list[dict[str, object]] | None,
+            on_token: Callable[[str], None] | None = None,
+            on_reasoning: Callable[[str], None] | None = None,
+            reasoning: bool = False,
+        ) -> AIMessage:
+            seen["on_token"] = on_token
+            seen["on_reasoning"] = on_reasoning
+            seen["reasoning"] = reasoning
+            return AIMessage(content="ok")
+
+    events: list[object] = []
+    agent, _ = _agent(_Capturing())
+    agent.run("w", "q", on_event=events.append, reasoning=True)
+    assert seen["reasoning"] is True
+    assert seen["on_token"] is not None and seen["on_reasoning"] is not None
+
+
 def test_state_persisted_even_when_runtime_raises() -> None:
     """runtime 抛异常时 finally 仍落盘：用户输入不丢。"""
 
     class _Boom:
-        def chat(self, messages: list[Message], tools: list[dict[str, object]] | None, on_token: Callable[[str], None] | None = None) -> AIMessage:
+        def chat(
+            self,
+            messages: list[Message],
+            tools: list[dict[str, object]] | None,
+            on_token: Callable[[str], None] | None = None,
+            on_reasoning: Callable[[str], None] | None = None,
+            reasoning: bool = False,
+        ) -> AIMessage:
             raise RuntimeError("llm down")
 
     agent, session = _agent(_Boom())

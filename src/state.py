@@ -3,6 +3,7 @@
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -11,6 +12,16 @@ from src.message import Message, ToolCall, ToolMessage
 
 # —— 顶层参数 ——
 CREATED_AT_FORMAT = "%Y%m%d-%H%M%S"  # 会话创建时间戳格式（用作日志文件名前缀）
+
+EventKind = Literal["user", "tool_result", "reasoning", "answer"]  # 四个展示通道
+
+
+@dataclass(frozen=True)
+class Event:
+    """一次结构化展示事件：kind 区分四通道，text 为该通道的增量/内容（CLI 按 kind 分通道渲染）。"""
+
+    kind: EventKind
+    text: str
 
 
 class AgentState(BaseModel):
@@ -37,6 +48,8 @@ class RunContext:
     state: AgentState
     tools_schema: list[dict[str, object]] = field(default_factory=list)
     on_token: Callable[[str], None] | None = None  # 流式 sink（CLI 注入；None=不流式）
+    on_event: Callable[[Event], None] | None = None  # 结构化展示 sink（CLI 注入；按 kind 分通道渲染）
+    reasoning: bool = False  # :think 开关；True 时本次 run 开启思考模式
     step: int = 0  # 本次 run 的循环步数；最大轮次基准（每次 run 从 0 起）
     stop_reason: str | None = None  # 中间件可设此值提前终止 loop（如超轮次）
     current_tool_call: ToolCall | None = None  # 供 [工具调用前] 读取

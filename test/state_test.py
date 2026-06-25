@@ -1,7 +1,7 @@
-"""state 模块测试：AgentState 历史追加、RunContext 默认值。"""
+"""state 模块测试：AgentState 历史追加、RunContext 默认值、Event 四通道。"""
 
 from src.message import AIMessage, HumanMessage, ToolCall
-from src.state import AgentState, RunContext
+from src.state import AgentState, Event, RunContext
 
 
 def test_agent_state_starts_with_empty_history() -> None:
@@ -41,3 +41,12 @@ def test_run_context_defaults_are_transient_and_empty() -> None:
     assert ctx.stop_reason is None
     assert ctx.current_tool_call is None
     assert ctx.current_tool_result is None
+    assert ctx.reasoning is False
+    assert ctx.on_event is None
+
+
+def test_event_carries_kind_and_text() -> None:
+    """Event 承载四通道之一的 kind 与文本。"""
+    evt = Event(kind="reasoning", text="让我想想")
+    assert evt.kind == "reasoning"
+    assert evt.text == "让我想想"
