@@ -10,12 +10,13 @@ from dataclasses import dataclass
 from typing import Literal
 
 from src.agent import Agent
-from src.config import BACKOFF, DANGER_PATTERN, KEEP_RECENT, MAX_MSG, MAX_RETRY, MAX_TURN, STREAM, Settings
+from src.config import BACKOFF, DANGER_PATTERN, KEEP_RECENT, LOG_DIR, LOG_NAME_MAXLEN, MAX_MSG, MAX_RETRY, MAX_TURN, STREAM, Settings
 from src.llm.deepseek_client import DeepSeekClient
 from src.message import ToolCall
 from src.middleware.approval import ApprovalMiddleware
 from src.middleware.base import Middleware
 from src.middleware.context import ContextMiddleware
+from src.middleware.log import LogMiddleware
 from src.middleware.max_turn import MaxTurnMiddleware
 from src.middleware.prefix import SessionPrefixMiddleware, build_runtime_env
 from src.middleware.retry import RetryMiddleware
@@ -221,6 +222,7 @@ def build_agent(settings: Settings, toggles: Toggles) -> tuple[Agent, SessionMan
 
     middlewares: list[Middleware] = [
         SessionPrefixMiddleware(todo=todo_store, env=build_runtime_env(settings)),
+        LogMiddleware(log_dir=LOG_DIR, name_maxlen=LOG_NAME_MAXLEN),
         TraceMiddleware(sink=trace_sink),
         MaxTurnMiddleware(max_turn=MAX_TURN),
         ContextMiddleware(llm=llm, max_msg=MAX_MSG, keep_recent=KEEP_RECENT),

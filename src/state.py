@@ -2,10 +2,15 @@
 
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from datetime import datetime
 
 from pydantic import BaseModel, Field
 
 from src.message import Message, ToolCall, ToolMessage
+
+
+# —— 顶层参数 ——
+CREATED_AT_FORMAT = "%Y%m%d-%H%M%S"  # 会话创建时间戳格式（用作日志文件名前缀）
 
 
 class AgentState(BaseModel):
@@ -16,6 +21,7 @@ class AgentState(BaseModel):
     """
 
     thread_id: str
+    created_at: str = Field(default_factory=lambda: datetime.now().strftime(CREATED_AT_FORMAT))
     messages: list[Message] = Field(default_factory=list)
 
 

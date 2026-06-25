@@ -18,3 +18,6 @@ wheels/
 .vscode
 
 doc/interview
+
+# Per-session run logs
+log/

@@ -11,6 +11,12 @@ def test_agent_state_starts_with_empty_history() -> None:
     assert state.messages == []
 
 
+def test_agent_state_has_creation_timestamp() -> None:
+    """新建会话状态自动带非空创建时间戳（用于日志文件名）。"""
+    state = AgentState(thread_id="w1")
+    assert state.created_at and isinstance(state.created_at, str)
+
+
 def test_agent_state_appends_messages_preserving_subclass() -> None:
     """向 messages 追加消息后，子类类型与字段应被保留（追加而非整表校验）。"""
     state = AgentState(thread_id="w1")
