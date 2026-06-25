@@ -8,7 +8,8 @@ This directory holds the project's documents. The three core documents form a "R
 |---|---|---|
 | [PRD.md](PRD.md) | Product requirements (the interview prompt) | What to build, acceptance criteria |
 | [DDD.md](DDD.md) | Detailed design (architecture, module signatures, data flow; borrows LangGraph lifecycle + LangChain middleware) | How to build it |
-| [plan.md](plan.md) | Development plan (phased TDD, per-phase definition of done, requirement mapping) | In what steps, when it's done |
+| [plan/01plan.md](plan/01plan.md) | Phase-1 development plan (phased TDD, per-phase definition of done, requirement mapping) | In what steps, when it's done |
+| [plan/02plan.md](plan/02plan.md) | Phase-2 development plan (the 9 new features added 2026-06-25) | In what steps, when it's done |
 | CLAUDE.md | This file — directory guide | — |
 
 ## Writing Conventions

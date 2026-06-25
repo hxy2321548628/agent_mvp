@@ -2,7 +2,7 @@
 
 - 命令解析 parse_command 为纯函数，离线可测；Repl 接受注入的 agent/session/sink，便于端到端测试。
 - build_agent 实例化具体依赖（DeepSeekClient、工具、有序中间件、内存 Checkpointer）注入出 Agent。
-- 中间件顺序：MaxTurn 在 Context 前（超限短路省压缩，见 plan.md P6 完成标准）。
+- 中间件顺序：MaxTurn 在 Context 前（超限短路省压缩，见 plan/01plan.md P6 完成标准）。
 """
 
 from collections.abc import Callable
