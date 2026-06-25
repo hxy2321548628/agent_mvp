@@ -180,12 +180,18 @@ def test_empty_response_error_is_retryable() -> None:
     assert issubclass(EmptyLLMResponseError, LLMInfraError)
 
 
+def test_from_credentials_builds_offline_ignoring_env_proxy() -> None:
+    """from_credentials 应离线可构造：trust_env=False 使其不被系统 socks 代理绊倒。"""
+    client = DeepSeekClient.from_credentials("k", "http://x", "m", proxy="http://127.0.0.1:7890")
+    assert isinstance(client, DeepSeekClient)
+
+
 @pytest.mark.slow
 def test_real_deepseek_smoke_calculates() -> None:
     """@slow 真实 API 冒烟：问 12*8，最终答案应含 96（需 DEEPSEEK_API_KEY，默认不跑）。"""
     settings = Settings()
     if not settings.DEEPSEEK_API_KEY:
         pytest.skip("需要真实 DEEPSEEK_API_KEY")
-    client = DeepSeekClient.from_credentials(settings.DEEPSEEK_API_KEY, settings.DEEPSEEK_BASE_URL, settings.DEEPSEEK_MODEL)
+    client = DeepSeekClient.from_credentials(settings.DEEPSEEK_API_KEY, settings.DEEPSEEK_BASE_URL, settings.DEEPSEEK_MODEL, settings.DEEPSEEK_PROXY)
     ai = client.chat([HumanMessage(content="只回答数字：12*8 等于多少？")], tools=None)
     assert "96" in ai.content

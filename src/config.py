@@ -27,3 +27,4 @@ class Settings(BaseSettings):
     DEEPSEEK_API_KEY: str = Field(default="", description="DeepSeek API 密钥（放 .env，勿入库）")
     DEEPSEEK_BASE_URL: str = Field(default=DEFAULT_BASE_URL, description="DeepSeek API 基础 URL")
     DEEPSEEK_MODEL: str = Field(default=DEFAULT_MODEL, description="默认对话模型")
+    DEEPSEEK_PROXY: str = Field(default="", description="可选 HTTP 代理（如 http://127.0.0.1:7890）；留空=直连，且忽略系统 socks 代理")

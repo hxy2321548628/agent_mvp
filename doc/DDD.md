@@ -353,7 +353,7 @@ class DeepSeekClient:
     """
     def __init__(self, client: OpenAI, model: str): ...                 # 注入 SDK 客户端（依赖倒置，便于离线打桩测试）
     @classmethod
-    def from_credentials(cls, api_key, base_url, model) -> Self: ...      # 组合根(CLI)便捷构造: 自建 OpenAI 客户端后注入
+    def from_credentials(cls, api_key, base_url, model, proxy="") -> Self: ...  # 自建 OpenAI 客户端注入；httpx trust_env=False 忽略系统(socks)代理，proxy 由 .env DEEPSEEK_PROXY 控制
     def chat(self, messages, tools, on_token=None) -> AIMessage: ...
 ```
 

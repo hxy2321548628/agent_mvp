@@ -183,7 +183,7 @@ class Repl:
 
 def build_agent(settings: Settings, toggles: Toggles) -> tuple[Agent, SessionManager]:
     """组合根：实例化具体依赖、按序组装中间件，注入出可用的 Agent 与其 SessionManager。"""
-    llm = DeepSeekClient.from_credentials(settings.DEEPSEEK_API_KEY, settings.DEEPSEEK_BASE_URL, settings.DEEPSEEK_MODEL)
+    llm = DeepSeekClient.from_credentials(settings.DEEPSEEK_API_KEY, settings.DEEPSEEK_BASE_URL, settings.DEEPSEEK_MODEL, settings.DEEPSEEK_PROXY)
     todo_store = TodoStore()
     registry = ToolRegistry()
     for tool in (CalculatorTool(), SearchTool(), WeatherTool(), TodoTool(todo_store)):

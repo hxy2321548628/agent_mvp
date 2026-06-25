@@ -9,6 +9,7 @@ from collections.abc import Callable, Iterable
 import json
 from typing import Self
 
+import httpx
 from openai import APIConnectionError, InternalServerError, OpenAI, RateLimitError
 
 from src.llm.base import EmptyLLMResponseError, LLMInfraError
@@ -110,9 +111,15 @@ class DeepSeekClient:
         self._model = model
 
     @classmethod
-    def from_credentials(cls, api_key: str, base_url: str, model: str) -> Self:
-        """组合根用的便捷构造：实例化指向 DeepSeek 的 OpenAI 客户端后注入（依赖倒置）。"""
-        return cls(client=OpenAI(api_key=api_key, base_url=base_url), model=model)
+    def from_credentials(cls, api_key: str, base_url: str, model: str, proxy: str = "") -> Self:
+        """组合根用的便捷构造：自建 OpenAI 客户端后注入（依赖倒置）。
+
+        显式构造 httpx 客户端并 trust_env=False：忽略环境里可能不被支持的 socks 代理
+        （否则构造期 httpx 探测 socks 会直接报错），改由 proxy 形参（来自 .env 的
+        DEEPSEEK_PROXY）显式控制走不走代理——留空即直连。
+        """
+        http_client = httpx.Client(trust_env=False, proxy=proxy or None)
+        return cls(client=OpenAI(api_key=api_key, base_url=base_url, http_client=http_client), model=model)
 
     def chat(
         self,
