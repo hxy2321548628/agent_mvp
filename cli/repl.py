@@ -1,28 +1,16 @@
-"""REPL 交互循环 repl.py：维护窗口与开关、驱动 Agent。所有展示经注入的 sink。"""
+"""REPL 交互循环 repl.py：维护窗口与开关、驱动 Agent，并集中全部终端 I/O sink。
+
+可调常量见 config.py，纯解析见 command.py；所有展示均经注入的 sink，便于离线测试。
+"""
 
 from collections.abc import Callable
 from dataclasses import dataclass
 
 from cli.command import parse_command
+from cli.config import DEFAULT_THREAD, GOODBYE, HELP, PROMPT, WELCOME
 from src.agent import Agent
+from src.message import ToolCall
 from src.session.manager import SessionManager
-
-
-# —— 顶层参数 ——
-DEFAULT_THREAD = "w1"
-PROMPT = "» "
-WELCOME = "ReAct Agent CLI —— 直接输入消息对话，:help 查看命令。"
-GOODBYE = "再见。"
-HELP = (
-    "命令：\n"
-    "  :new [id]      开新窗口（缺省自动命名）\n"
-    "  :switch <id>   切换到指定窗口\n"
-    "  :list          列出全部窗口（* 标记当前）\n"
-    "  :trace         开关执行/工具日志\n"
-    "  :stream        开关流式输出\n"
-    "  :help          显示本帮助\n"
-    "  :quit / :exit  退出"
-)
 
 
 @dataclass
@@ -35,6 +23,22 @@ class Toggles:
 
 def _print_token(token: str) -> None:
     print(token, end="", flush=True)
+
+
+def confirm_tool_call(call: ToolCall) -> bool:
+    """终端征询工具授权：输入 y/yes 允许，其它一律拒绝（P13 升级为彩色可选项）。"""
+    answer = input(f"⚠ 授权工具 {call.name} {call.arguments}？[y/N] ")
+    return answer.strip().lower() in {"y", "yes"}
+
+
+def make_trace_sink(toggles: Toggles) -> Callable[[str], None]:
+    """造一个 trace sink：仅当 trace_on 打开时打印（注入 TraceMiddleware）。"""
+
+    def sink(line: str) -> None:
+        if toggles.trace_on:
+            print(line)
+
+    return sink
 
 
 class Repl:
@@ -125,3 +129,14 @@ class Repl:
 
     def _unknown(self, arg: str) -> str:
         return f"未知命令 :{arg}（试试 :help）"
+
+    def run(self) -> None:
+        """读取-求值-打印循环：唯一直接做 input() 的地方（I/O，不进单测）。"""
+        self._out(WELCOME)
+        while self.running:
+            try:
+                line = input(PROMPT)
+            except (EOFError, KeyboardInterrupt):
+                print()
+                break
+            self.handle(line)

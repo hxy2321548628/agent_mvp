@@ -1,11 +1,10 @@
-"""命令解析 command.py：纯函数，零外部依赖，离线可测。"""
+"""命令解析 command.py：纯函数，离线可测；可调常量见 config.py。"""
 
 from dataclasses import dataclass
 from typing import Literal
 
+from cli.config import COMMAND_PREFIX
 
-# —— 顶层参数 ——
-COMMAND_PREFIX = ":"
 
 CommandKind = Literal["new", "switch", "list", "trace", "stream", "quit", "help", "say", "unknown"]
 _NAMED: dict[str, CommandKind] = {

@@ -5,12 +5,10 @@
 中间件顺序：SessionPrefix → Log → Trace → MaxTurn → Context → Approval → Retry。
 """
 
-from cli.command import PROMPT, WELCOME
-from cli.repl import Repl, Toggles
+from cli.repl import Repl, Toggles, confirm_tool_call, make_trace_sink
 from src.agent import Agent
 from src.config import BACKOFF, DANGER_PATTERN, KEEP_RECENT, LOG_DIR, LOG_NAME_MAXLEN, MAX_MSG, MAX_RETRY, MAX_TURN, STREAM, Settings
 from src.llm.deepseek_client import DeepSeekClient
-from src.message import ToolCall
 from src.middleware.approval import ApprovalMiddleware
 from src.middleware.base import Middleware
 from src.middleware.context import ContextMiddleware
@@ -35,12 +33,6 @@ from src.tool.weather import WeatherTool
 from src.tool.write import WriteTool
 
 
-def _confirm_tool_call(call: ToolCall) -> bool:
-    """终端征询工具授权：输入 y/yes 允许，其它一律拒绝（P13 升级为彩色可选项）。"""
-    answer = input(f"⚠ 授权工具 {call.name} {call.arguments}？[y/N] ")
-    return answer.strip().lower() in {"y", "yes"}
-
-
 def build_agent(settings: Settings, toggles: Toggles) -> tuple[Agent, SessionManager]:
     """组合根：实例化具体依赖、按序组装中间件，注入出可用的 Agent 与其 SessionManager。"""
     llm = DeepSeekClient.from_credentials(settings.DEEPSEEK_API_KEY, settings.DEEPSEEK_BASE_URL, settings.DEEPSEEK_MODEL, settings.DEEPSEEK_PROXY)
@@ -61,17 +53,13 @@ def build_agent(settings: Settings, toggles: Toggles) -> tuple[Agent, SessionMan
     for tool in tools:
         registry.register(tool)
 
-    def trace_sink(line: str) -> None:
-        if toggles.trace_on:
-            print(line)
-
     middlewares: list[Middleware] = [
         SessionPrefixMiddleware(todo=todo_store, env=build_runtime_env(settings)),
         LogMiddleware(log_dir=LOG_DIR, name_maxlen=LOG_NAME_MAXLEN),
-        TraceMiddleware(sink=trace_sink),
+        TraceMiddleware(sink=make_trace_sink(toggles)),
         MaxTurnMiddleware(max_turn=MAX_TURN),
         ContextMiddleware(llm=llm, max_msg=MAX_MSG, keep_recent=KEEP_RECENT),
-        ApprovalMiddleware(requires_approval=registry.requires_approval, confirm=_confirm_tool_call, danger_pattern=DANGER_PATTERN),
+        ApprovalMiddleware(requires_approval=registry.requires_approval, confirm=confirm_tool_call, danger_pattern=DANGER_PATTERN),
         RetryMiddleware(max_retry=MAX_RETRY, backoff=BACKOFF),
     ]
     runtime = AgentRuntime(llm=llm, registry=registry, middlewares=middlewares, settings=settings)
@@ -84,15 +72,7 @@ def main() -> None:
     settings = Settings()
     toggles = Toggles(stream_on=STREAM)
     agent, session = build_agent(settings, toggles)
-    repl = Repl(agent=agent, session=session, toggles=toggles)
-    print(WELCOME)
-    while repl.running:
-        try:
-            line = input(PROMPT)
-        except (EOFError, KeyboardInterrupt):
-            print()
-            break
-        repl.handle(line)
+    Repl(agent=agent, session=session, toggles=toggles).run()
 
 
 if __name__ == "__main__":
