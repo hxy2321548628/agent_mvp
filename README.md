@@ -56,7 +56,25 @@ graph TD
     runtime --> tool
 ```
 
-> 想深入理解「为什么这么设计」，从 [doc/agent-design/](doc/agent-design/) 读起（10 篇设计思路汇报）；要精确签名与数据流见 [doc/DDD.md](doc/DDD.md)。
+> 想深入理解「为什么这么设计」，从 [doc/agent-design/](doc/agent-design/) 读起（10 篇设计思路汇报）；要精确签名与数据流见 [doc/ddd/](doc/ddd/)。
+
+## 🧭 下一步开发（三期规划）
+
+一/二期已交付（上方「✨ 特性」即其成果）。三期面向「**从 MVP 到可用产品**」，把评测、并发、持久化、记忆与性能补齐——目前处于**设计完成、待实现**阶段：需求 [03prd](doc/prd/03prd.md) R10–R18 · 设计 [03ddd](doc/ddd/03ddd.md) §24–§33 · 计划 [03plan](doc/plan/03plan.md) P15–P23。
+
+| 阶段 | 方向 | 一句话 | 是否完成 |
+|---|---|---|:---:|
+| P15 | 📊 结构化可观测 | 把每次 run 沉淀为机读轨迹（token / 成本 / cache 命中），评测的地基 | ⬜ |
+| P16 | 🧪 评测回归体系 | 录制回放（确定性、进 CI）+ 真实 API 冒烟，守住行为零回归 | ⬜ |
+| P17 | 💾 会话持久化 | JSONL 落盘 + 项目路径转义隔离，进程退出不丢、可重启续聊 | ⬜ |
+| P18 | ⚡ src 异步核心 | 全链路 async，支撑多会话并发与未来 web / 飞书前端 | ⬜ |
+| P19 | 🔀 并行工具调用 | 一轮多工具 `asyncio.gather` 并发，缩短时延 | ⬜ |
+| P20 | 🚀 缓存 + 非破坏压缩 | 稳定前缀提升缓存命中；按 token 预算压缩、完整历史落盘 | ⬜ |
+| P21 | 🎚 分级模型路由 | 小模型判路由、大模型生成，省成本降时延 | ⬜ |
+| P22 | 🧠 分层记忆 | 工作 / 情景 / 语义三层 + 项目级长期记忆（渐进披露、语义召回）| ⬜ |
+| P23 | 🛡 上线前安全 | 取消中断 / 工具沙箱 / 多用户鉴权隔离限流 / 多 provider | ⬜ |
+
+> 推进次序：**先建评测网（P15–P16）再动刀**——P18 / P20 等重构都会改变 Agent 行为，有回归网才敢改。完整阶段拆解与验收见 [doc/plan/03plan.md](doc/plan/03plan.md)。
 
 ## 🚀 快速开始
 
@@ -196,7 +214,7 @@ agent_mvp/
 │   ├── main.py           # 装配注入 + 入口
 │   └── repl.py command.py render.py config.py
 ├── test/                 # 与 src/cli 镜像的测试
-├── doc/                  # PRD / DDD / agent-design / plan
+├── doc/                  # prd / ddd / agent-design / plan
 └── log/                  # 运行时日志（每会话一份）
 ```
 
@@ -205,8 +223,8 @@ agent_mvp/
 | 文档 | 内容 |
 |---|---|
 | [doc/agent-design/](doc/agent-design/) | **设计思路汇报**（10 篇）：心智模型、请求旅程、运行时与中间件、数据模型、工具与 LLM、横切关注点、设计原则、扩展指南、局限与演进 |
-| [doc/DDD.md](doc/DDD.md) | 详细设计：架构、模块签名、数据流（§1–§23） |
-| [doc/PRD.md](doc/PRD.md) | 产品需求（面试原题 + 第二阶段 9 项工程化需求） |
+| [doc/ddd/](doc/ddd/) | 详细设计：架构、模块签名、数据流（§1–§33，分 01/02/03ddd 三期） |
+| [doc/prd/](doc/prd/) | 产品需求（01prd 面试原题 · 02prd R1–R9 · 03prd R10–R18） |
 | [doc/plan/](doc/plan/) | 分阶段 TDD 实施计划 |
 
 ## 🔗 相似项目 / Related Work

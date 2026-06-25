@@ -2,7 +2,7 @@
 
 A command-line client built on top of the @src agent library. `src/` is the library;
 `cli/` is the client — the composition root and the only place that does terminal I/O.
-Design: see @doc/DDD.md §12.
+Design: see @doc/ddd/01ddd.md §12.
 
 ## Responsibility
 

@@ -61,7 +61,7 @@ def _eval_node(node):
     raise CalculatorError(...)   # 白名单之外一律拒绝
 ```
 
-> 这是工具设计的通用心法：**能力越界（任意代码执行、删文件、抓任意 URL）的工具，要么白名单约束，要么走 HITL 授权**。`bash`/`write`/`edit` 走授权，`calculator` 走白名单，`fetch` 只抓用户给的 URL（见 [06](06-cross-cutting.md) 与 [DDD §19/§20](../DDD.md)）。
+> 这是工具设计的通用心法：**能力越界（任意代码执行、删文件、抓任意 URL）的工具，要么白名单约束，要么走 HITL 授权**。`bash`/`write`/`edit` 走授权，`calculator` 走白名单，`fetch` 只抓用户给的 URL（见 [06](06-cross-cutting.md) 与 [DDD §19/§20](../ddd/02ddd.md)）。
 
 另一个值得一看的是 `todo`（[todo.py](../../src/tool/todo.py)）：它把状态 `TodoStore` 与工具本身分离——除了被 `TodoTool` 调用，`SessionPrefixMiddleware` 也复用同一个 `TodoStore` 注入「未完成提醒」。这是「一份状态、多处复用」的小范例。
 
@@ -101,7 +101,7 @@ def chat(self, messages, tools, on_token=None, on_reasoning=None, reasoning=Fals
 
 ### 空响应也是一种 infra 错误
 
-若模型返回 `content` 与 `tool_calls` **同时为空**，`chat` 抛 `EmptyLLMResponseError`（[deepseek_client.py:167](../../src/llm/deepseek_client.py#L167)）。它继承自 `LLMInfraError`，于是被同一条 `wrap_model_call` 重试路径覆盖——空响应视为异常、重试（见 [DDD §11](../DDD.md)）。
+若模型返回 `content` 与 `tool_calls` **同时为空**，`chat` 抛 `EmptyLLMResponseError`（[deepseek_client.py:167](../../src/llm/deepseek_client.py#L167)）。它继承自 `LLMInfraError`，于是被同一条 `wrap_model_call` 重试路径覆盖——空响应视为异常、重试（见 [DDD §11](../ddd/01ddd.md)）。
 
 ## 5.4 小结
 

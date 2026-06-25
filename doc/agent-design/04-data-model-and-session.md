@@ -27,7 +27,7 @@ classDiagram
 
 > 一个设计要点：**「思考过程 / 工具调用 / 最终答案」三者由同一条 `AIMessage` 的不同字段承载**，而不是三种消息类型。`reasoning_content` 与 `content` 分流（思考 vs 答案），`tool_calls` 非空即代表「这一轮要行动」。这直接对应题目要求的「提取思考、工具调用或最终答案」。
 >
-> 还有个易踩的坑写进了类型注释：带 `tool_calls` 的那一轮，`reasoning_content` 在推理模式下**必须回传**给端点，否则会被判 400（见 [05](05-tool-and-llm.md) 与 [DDD §17](../DDD.md)）。
+> 还有个易踩的坑写进了类型注释：带 `tool_calls` 的那一轮，`reasoning_content` 在推理模式下**必须回传**给端点，否则会被判 400（见 [05](05-tool-and-llm.md) 与 [DDD §17](../ddd/02ddd.md)）。
 
 ## 4.2 双态：AgentState（持久） vs RunContext（瞬态）
 

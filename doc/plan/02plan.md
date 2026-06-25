@@ -1,6 +1,6 @@
 # 开发计划文档（二期）——9 项工程化增强
 
-> 依据：需求见 [PRD.md](../PRD.md)「第二阶段需求」R1–R9，设计见 [DDD.md](../DDD.md) §16–§23。
+> 依据：需求见 [PRD.md](../prd/02prd.md)「第二阶段需求」R1–R9，设计见 [DDD.md](../ddd/02ddd.md) §16–§23。
 > 一期（P0–P7）见 [01plan.md](01plan.md)。本文只讲「怎么分阶段做、每阶段做完算数」，不重复设计细节。
 > 起始日期 2026-06-25。
 
@@ -43,7 +43,7 @@ flowchart TD
 | 项 | 内容 |
 |---|---|
 | 目标 | 思考从「content 合体」升级为 DeepSeek 原生 `reasoning_content`；解决带工具调用时的回传 400 |
-| 任务 | `message.py`：`AIMessage.reasoning_content: str=""`；`config.py`：`REASONING_EFFORT`；`deepseek_client.py`：`reasoning` 开启时在**同一 flash 模型**上传 `reasoning_effort`+`extra_body.thinking`、解析/流式**分别累积** content 与 reasoning_content、`_to_sdk_message` 对 **assistant+tool_calls** 回传 `reasoning_content`（见 [DDD §17](../DDD.md)）。注：`RunContext.reasoning` 开关字段移到 P13（在 CLI `:think` 处才被使用）|
+| 任务 | `message.py`：`AIMessage.reasoning_content: str=""`；`config.py`：`REASONING_EFFORT`；`deepseek_client.py`：`reasoning` 开启时在**同一 flash 模型**上传 `reasoning_effort`+`extra_body.thinking`、解析/流式**分别累积** content 与 reasoning_content、`_to_sdk_message` 对 **assistant+tool_calls** 回传 `reasoning_content`（见 [DDD §17](../ddd/02ddd.md)）。注：`RunContext.reasoning` 开关字段移到 P13（在 CLI `:think` 处才被使用）|
 | 先写的测试 | 打桩 SDK 响应：`reasoning_content` 与 `content` 各归位；流式两路增量分别回调；`_to_sdk_message`：带 tool_calls 的 AIMessage 含 `reasoning_content`、最终答案轮不含、SystemMessage 仍正确转 system；`@slow` 推理冒烟 |
 | 完成标准 | 离线解析/回传测试绿；推理模式真实可答且不触 400 |
 
@@ -52,7 +52,7 @@ flowchart TD
 | 项 | 内容 |
 |---|---|
 | 目标 | SystemPrompt+Memory 合并为一个会话前缀注入；压缩不再吃掉系统提示 |
-| 任务 | `message.py`：`SystemMessage.pinned`；新增 `middleware/prefix.py`（`SessionPrefixMiddleware`：`on_session_start` 拼**静态 01–07 + 动态 ENV08 + 未完成 todo 提醒**并以 pinned 置顶、幂等重注入；`build_runtime_env(settings)` 采集环境）；删除 `middleware/memory.py` 的旧职责并入；`middleware/context.py`：`_split_pinned` **跳过 pinned 前缀**只摘要其后（见 [DDD §18](../DDD.md)）|
+| 任务 | `message.py`：`SystemMessage.pinned`；新增 `middleware/prefix.py`（`SessionPrefixMiddleware`：`on_session_start` 拼**静态 01–07 + 动态 ENV08 + 未完成 todo 提醒**并以 pinned 置顶、幂等重注入；`build_runtime_env(settings)` 采集环境）；删除 `middleware/memory.py` 的旧职责并入；`middleware/context.py`：`_split_pinned` **跳过 pinned 前缀**只摘要其后（见 [DDD §18](../ddd/02ddd.md)）|
 | 先写的测试 | 前缀含系统提示 + 动态环境 + todo 提醒且置顶；追问二次 `on_session_start` **不重复累积**（幂等）；超阈值压缩**保留钉住前缀**、只摘要其后历史；无 todo 时不注提醒 |
 | 完成标准 | 装配根用 `SessionPrefix` 取代 `Memory`；压缩后前缀仍在 |
 
@@ -61,7 +61,7 @@ flowchart TD
 | 项 | 内容 |
 |---|---|
 | 目标 | 满足 R4 全套工具 + R9 真实抓取；仅「实现 Tool + 注册」，不动 runtime/中间件 |
-| 任务 | `tool/base.py`：`Tool.requires_approval: bool=False`；新增 `tool/bash.py`(执行+超时)、`read.py`/`write.py`/`edit.py`/`glob.py`/`grep.py`；`tool/search.py → tool/fetch.py`（httpx GET 用户 URL，网络/超时→`ToolInfraError`、4xx/解析失败→`is_error`）；`config.py`：`BASH_TIMEOUT`/`FETCH_TIMEOUT`（见 [DDD §19](../DDD.md)）|
+| 任务 | `tool/base.py`：`Tool.requires_approval: bool=False`；新增 `tool/bash.py`(执行+超时)、`read.py`/`write.py`/`edit.py`/`glob.py`/`grep.py`；`tool/search.py → tool/fetch.py`（httpx GET 用户 URL，网络/超时→`ToolInfraError`、4xx/解析失败→`is_error`）；`config.py`：`BASH_TIMEOUT`/`FETCH_TIMEOUT`（见 [DDD §19](../ddd/02ddd.md)）|
 | 先写的测试 | 各工具单测（read 行号、edit 精确替换、glob/grep 命中、write 落盘、bash 退出码/超时→错误文本）；`write`/`edit` 的 `requires_approval=True`；fetch 用打桩 httpx：成功返回正文、超时→`ToolInfraError`、404→`is_error`；`to_schema` 含全部新工具 |
 | 完成标准 | 注册即用；不触 runtime/中间件；fetch 取代 search |
 
@@ -70,7 +70,7 @@ flowchart TD
 | 项 | 内容 |
 |---|---|
 | 目标 | 有副作用的工具调用前征询授权，拒绝即回灌不中断 |
-| 任务 | `tool/registry.py`：加 `requires_approval(name)` 查询；新增 `middleware/approval.py`（`ApprovalMiddleware.wrap_tool_call`：注入的 `requires_approval(name)` ∪ bash 命令命中 `DANGER_PATTERN` → 调注入的 `confirm` 回调；拒绝→`is_error` 回灌）；`config.py`：`DANGER_PATTERN`；组合根注入 `registry.requires_approval` 与基本 y/N `confirm`（见 [DDD §20](../DDD.md)）|
+| 任务 | `tool/registry.py`：加 `requires_approval(name)` 查询；新增 `middleware/approval.py`（`ApprovalMiddleware.wrap_tool_call`：注入的 `requires_approval(name)` ∪ bash 命令命中 `DANGER_PATTERN` → 调注入的 `confirm` 回调；拒绝→`is_error` 回灌）；`config.py`：`DANGER_PATTERN`；组合根注入 `registry.requires_approval` 与基本 y/N `confirm`（见 [DDD §20](../ddd/02ddd.md)）|
 | 先写的测试 | write/edit 触发征询；bash `rm -rf`/`>` 触发、`ls`/`cat` 放行；只读工具放行；`confirm` 返 False→`is_error('用户拒绝授权')` 且 loop 继续；fake confirm 离线可测 |
 | 完成标准 | 授权逻辑全在中间件；`src/` 不做终端 I/O（confirm 注入）|
 
@@ -79,7 +79,7 @@ flowchart TD
 | 项 | 内容 |
 |---|---|
 | 目标 | 每会话一份持久日志文件，常开、独立于 `:trace` |
-| 任务 | `state.py`：`AgentState.created_at`；`config.py`：`LOG_DIR`/`LOG_NAME_MAXLEN`；新增 `middleware/log.py`（订生命周期钩子→结构化事件写 `log/<created_at>+<首句截断>.log`，文件名清洗）（见 [DDD §21](../DDD.md)）|
+| 任务 | `state.py`：`AgentState.created_at`；`config.py`：`LOG_DIR`/`LOG_NAME_MAXLEN`；新增 `middleware/log.py`（订生命周期钩子→结构化事件写 `log/<created_at>+<首句截断>.log`，文件名清洗）（见 [DDD §21](../ddd/02ddd.md)）|
 | 先写的测试 | 文件名 = 创建时间 + 清洗后首句截断；记录模型决策/工具调用/结果/异常；不受 `:trace` 开关影响；非法字符被清洗 |
 | 完成标准 | 跑一轮对话后 `log/` 下生成对应文件且内容完整 |
 
@@ -88,7 +88,7 @@ flowchart TD
 | 项 | 内容 |
 |---|---|
 | 目标 | 四通道（用户/工具返回/思考/最终回复）配色区分；`:think` 控推理 |
-| 任务 | `state.py`：`RunContext.reasoning`（:think 开关）/`on_event`；`deepseek_client.py` 流式把 content→answer、reasoning_content→reasoning 两路喂事件；runtime/中间件 `after_tool` 喂 tool_result 事件；`cli/render.py`（rich 分通道样式）；`cli/main.py`：注入 `on_event`、新增 `:think`、HITL `confirm` 用终端「允许/拒绝/总是允许」选项（见 [DDD §22](../DDD.md)）|
+| 任务 | `state.py`：`RunContext.reasoning`（:think 开关）/`on_event`；`deepseek_client.py` 流式把 content→answer、reasoning_content→reasoning 两路喂事件；runtime/中间件 `after_tool` 喂 tool_result 事件；`cli/render.py`（rich 分通道样式）；`cli/main.py`：注入 `on_event`、新增 `:think`、HITL `confirm` 用终端「允许/拒绝/总是允许」选项（见 [DDD §22](../ddd/02ddd.md)）|
 | 先写的测试 | `parse_command` 认 `:think`；事件分发到对应通道（注入 fake renderer 断言 kind）；推理关时不喂 reasoning 事件；端到端：一次带工具+推理的对话四通道都被渲染 |
 | 完成标准 | 一条命令跑起来即见分区彩色输出与可切的推理 |
 

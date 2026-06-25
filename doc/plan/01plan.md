@@ -1,6 +1,6 @@
 # 开发计划文档——最小可用 Agent
 
-> 依据：需求见 [PRD.md](../PRD.md)，设计见 [DDD.md](../DDD.md)。
+> 依据：需求见 [PRD.md](../prd/01prd.md)，设计见 [DDD.md](../ddd/01ddd.md)。
 > 本文只讲"怎么分阶段做、每阶段做完算数"，不重复设计细节。
 
 ---
@@ -39,7 +39,7 @@ P2 是枢纽（走通骨架）；P3–P6 完成骨架后可较独立推进，在
 - [ ] `uv run ruff check` 与 `ruff format` 干净；
 - [ ] 函数 ≤ 50 行、无 `Any`、Google 风格 docstring、依赖显式注入；
 - [ ] 关键参数集中在文件顶部 / `config.py`，不硬编码进函数；
-- [ ] 文件/文件夹单数命名，目录结构与 [DDD §3](../DDD.md) 一致。
+- [ ] 文件/文件夹单数命名，目录结构与 [DDD §3](../ddd/01ddd.md) 一致。
 
 ---
 
@@ -50,7 +50,7 @@ P2 是枢纽（走通骨架）；P3–P6 完成骨架后可较独立推进，在
 | 项 | 内容 |
 |---|---|
 | 目标 | 项目可跑起来、依赖齐、密钥可读 |
-| 任务 | 补依赖（`pytest`、`pytest-cov`）；按 [DDD §3](../DDD.md) 建空包骨架；`config.py`：顶层参数（`DEFAULT_MODEL=deepseek-v4-flash`、`DEFAULT_BASE_URL=https://api.deepseek.com`、`MAX_TURN`、`MAX_MSG`、`KEEP_RECENT`、`STREAM`）+ `Settings`（读 `.env`：`DEEPSEEK_API_KEY` 等）；`.env.example` |
+| 任务 | 补依赖（`pytest`、`pytest-cov`）；按 [DDD §3](../ddd/01ddd.md) 建空包骨架；`config.py`：顶层参数（`DEFAULT_MODEL=deepseek-v4-flash`、`DEFAULT_BASE_URL=https://api.deepseek.com`、`MAX_TURN`、`MAX_MSG`、`KEEP_RECENT`、`STREAM`）+ `Settings`（读 `.env`：`DEEPSEEK_API_KEY` 等）；`.env.example` |
 | 先写的测试 | `Settings` 能从环境变量加载；包可 import |
 | 完成标准 | `uv run pytest` 能跑（≥1 测试）；`ruff` 干净；`.env` 不入库 |
 
@@ -77,7 +77,7 @@ P2 是枢纽（走通骨架）；P3–P6 完成骨架后可较独立推进，在
 | 项 | 内容 |
 |---|---|
 | 目标 | 接真实 API；自实现"SDK 结构 → 内部类型"的解析；同步流式 |
-| 任务 | `llm/deepseek_client.py`：`openai` SDK 指向 DeepSeek，function calling；解析 `content`→思考/答案、`tool_calls[].function.arguments`(JSON)→`ToolCall`；`on_token` 同步流式（`for chunk in stream` 累积 + 回调 content 增量）；按 [DDD §7.2](../DDD.md) 写清"为何用 SDK"的 docstring |
+| 任务 | `llm/deepseek_client.py`：`openai` SDK 指向 DeepSeek，function calling；解析 `content`→思考/答案、`tool_calls[].function.arguments`(JSON)→`ToolCall`；`on_token` 同步流式（`for chunk in stream` 累积 + 回调 content 增量）；按 [DDD §7.2](../ddd/01ddd.md) 写清"为何用 SDK"的 docstring |
 | 先写的测试 | 用打桩的 SDK 响应对象测解析（tool_calls / 纯文本 / 坏 JSON→错误回灌）；流式：`on_token` 按增量被调用且拼回完整 `AIMessage`、工具轮不触发 `on_token`；`@slow` 真实 API 冒烟（算 12*8） |
 | 完成标准 | 真实 API 能回答；流式实时输出；离线解析测试绿 |
 
@@ -104,7 +104,7 @@ P2 是枢纽（走通骨架）；P3–P6 完成骨架后可较独立推进，在
 | 项 | 内容 |
 |---|---|
 | 目标 | 把横切关注点拆成独立中间件，主循环零改动 |
-| 任务 | `middleware/`：`trace.py`、`max_turn.py`、`context.py`（破坏性摘要）、`memory.py`（todo 提醒注入）、`retry.py`（`wrap_model_call` + `wrap_tool_call`，按 [DDD §7.3](../DDD.md) 处理流式重试边界） |
+| 任务 | `middleware/`：`trace.py`、`max_turn.py`、`context.py`（破坏性摘要）、`memory.py`（todo 提醒注入）、`retry.py`（`wrap_model_call` + `wrap_tool_call`，按 [DDD §7.3](../ddd/01ddd.md) 处理流式重试边界） |
 | 先写的测试 | trace 记到对应阶段；max_turn 终止；压缩触发/保留最近 N/摘要置顶；memory 提醒注入；retry 模型/工具 infra 重试；**环绕钩子洋葱嵌套顺序**（首个最外层）；wrap 短路 |
 | 完成标准 | 注册顺序正确（MaxTurn 在 Context 前）；逐个 TDD |
 
@@ -122,7 +122,7 @@ P2 是枢纽（走通骨架）；P3–P6 完成骨架后可较独立推进，在
 | 项 | 内容 |
 |---|---|
 | 目标 | 对齐 PRD 提交清单 |
-| 任务 | `README.md`（运行方式 + 系统设计概览 + **memory 召回时机与放置方式**，引用 [DDD §10](../DDD.md)）；`doc/prompt-log.md`（AI Prompt 与问题解决记录）；录屏（双窗口演示 + 工具调用 + 流式）；最终覆盖率报告 |
+| 任务 | `README.md`（运行方式 + 系统设计概览 + **memory 召回时机与放置方式**，引用 [DDD §10](../ddd/01ddd.md)）；`doc/prompt-log.md`（AI Prompt 与问题解决记录）；录屏（双窗口演示 + 工具调用 + 流式）；最终覆盖率报告 |
 | 完成标准 | PRD「提交内容」逐项齐全 |
 
 ---
@@ -138,7 +138,7 @@ P2 是枢纽（走通骨架）；P3–P6 完成骨架后可较独立推进，在
 | session 独立 + 追问 + 记住状态 | P5 |
 | 最大轮次限制 | P2(MaxTurn)、P6 |
 | context 管理 + 基础压缩 | P6(Context) |
-| 异常处理 | P2/P3/P5/P6（分层，见 [DDD §11](../DDD.md)）|
+| 异常处理 | P2/P3/P5/P6（分层，见 [DDD §11](../ddd/01ddd.md)）|
 | 工具 trace / 执行日志 | P6(Trace) |
 | 测试用例 | 每阶段（TDD）|
 | 真实 LLM API | P3 |
@@ -152,8 +152,8 @@ P2 是枢纽（走通骨架）；P3–P6 完成骨架后可较独立推进，在
 | 风险 | 缓解 |
 |---|---|
 | DeepSeek 密钥/网络不稳 | 离线测试全用 `FakeLLMClient`；真实调用走 `RetryMiddleware`；密钥放 `.env` |
-| function calling 返回格式偶发异常（坏 JSON / 空响应）| 解析层显式处理：坏参数→`is_error` 回灌、空响应→重试一次（见 [DDD §11](../DDD.md)）|
-| 流式 + 重试导致重复 token | 只对"未流出 token 的连接期失败"重试（见 [DDD §7.3](../DDD.md)）|
+| function calling 返回格式偶发异常（坏 JSON / 空响应）| 解析层显式处理：坏参数→`is_error` 回灌、空响应→重试一次（见 [DDD §11](../ddd/01ddd.md)）|
+| 流式 + 重试导致重复 token | 只对"未流出 token 的连接期失败"重试（见 [DDD §7.3](../ddd/01ddd.md)）|
 | 破坏性压缩丢早期细节 | MVP 接受；README 注明取舍，留"可逆压缩"为进阶项 |
 | 过度设计 | 严守宪法 YAGNI：当前阶段用不到的抽象一律不加 |
 

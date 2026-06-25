@@ -1,6 +1,6 @@
 # Agent Package
 
-The minimum-viable agent runtime library. Design: see @doc/DDD.md.
+The minimum-viable agent runtime library. Design: see @doc/ddd/01ddd.md.
 
 This agent is **"main loop + lifecycle middleware"** — borrowing LangGraph's runtime
 lifecycle stages and LangChain's middleware abstraction. It is the agent itself, not a

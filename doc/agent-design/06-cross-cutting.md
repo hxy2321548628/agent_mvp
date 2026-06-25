@@ -10,7 +10,7 @@
 2. **动态环境**（08 段）：工作目录、是否 git、平台、shell、模型名、日期——由 `build_runtime_env`（[prefix.py:38](../../src/middleware/prefix.py#L38)）在组合根采集后注入（便于离线测试时塞假环境）。
 3. **未完成 todo 提醒**（可选）：复用 `TodoStore`，把没做完的待办拼成一句提醒。
 
-> **一次合并的设计决策**：它合并了原本两个中间件——SystemPrompt（系统提示）与 Memory（todo 提醒）。理由：二者**同钩子**（`on_session_start`）、**同职责**（装配会话最前面的钉住前缀），拆成两个反而割裂。这是「单一职责」不等于「拆到最碎」的好例子（见 [DDD §18](../DDD.md)）。
+> **一次合并的设计决策**：它合并了原本两个中间件——SystemPrompt（系统提示）与 Memory（todo 提醒）。理由：二者**同钩子**（`on_session_start`）、**同职责**（装配会话最前面的钉住前缀），拆成两个反而割裂。这是「单一职责」不等于「拆到最碎」的好例子（见 [DDD §18](../ddd/02ddd.md)）。
 
 幂等性靠 `_strip_prefix`：每轮先删旧钉住前缀再重注入，于是多轮追问不会累积系统提示（呼应 [04 §4.3](04-data-model-and-session.md) 的 `pinned`）。
 
@@ -42,7 +42,7 @@ def wrap_tool_call(self, ctx, handler):
 1. **工具级标注** `requires_approval`（write/edit 置 True）；
 2. **bash 命令命中危险模式**（`rm`/`mv`/`sudo`/重定向/`git push` 等正则清单，[config.py `DANGER_PATTERN`](../../src/config.py)）。
 
-> **依赖倒置在这里尤其关键**：`requires_approval` 查询（= `ToolRegistry.requires_approval`）与 `confirm` 征询回调**都由组合根注入**，`src/` 不做终端 I/O。离线测试注入「恒真/恒假」的 fake confirm 即可验证放行/拦截两条路径。CLI 侧的 `confirm` 在 P11 是基本 y/N，P13 升级为彩色「允许/拒绝/总是允许」——而 `ApprovalMiddleware` **一行没改**（见 [08](08-extension-guide.md) 与 [DDD §20](../DDD.md)）。
+> **依赖倒置在这里尤其关键**：`requires_approval` 查询（= `ToolRegistry.requires_approval`）与 `confirm` 征询回调**都由组合根注入**，`src/` 不做终端 I/O。离线测试注入「恒真/恒假」的 fake confirm 即可验证放行/拦截两条路径。CLI 侧的 `confirm` 在 P11 是基本 y/N，P13 升级为彩色「允许/拒绝/总是允许」——而 `ApprovalMiddleware` **一行没改**（见 [08](08-extension-guide.md) 与 [DDD §20](../ddd/02ddd.md)）。
 
 ## 6.4 Trace vs Log：两种可观测，一份格式化
 
