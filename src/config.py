@@ -5,8 +5,9 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 # —— 顶层参数（集中管理，便于调参；不要硬编码进函数）——
-DEFAULT_MODEL = "deepseek-v4-flash"  # 默认对话模型
+DEFAULT_MODEL = "deepseek-v4-flash"  # 默认对话模型（自带 thinking 模式，按 :think 开关）
 DEFAULT_BASE_URL = "https://api.deepseek.com"  # DeepSeek（OpenAI 兼容）API 基础 URL
+REASONING_EFFORT = "high"  # 开启 thinking 时的推理强度：high / max
 MAX_TURN = 10  # 单次 run 的最大循环轮数（MaxTurnMiddleware 据此终止）
 MAX_MSG = 40  # 触发上下文压缩的消息条数阈值（ContextMiddleware）
 KEEP_RECENT = 10  # 压缩时保留的最近消息条数
@@ -26,5 +27,5 @@ class Settings(BaseSettings):
 
     DEEPSEEK_API_KEY: str = Field(default="", description="DeepSeek API 密钥（放 .env，勿入库）")
     DEEPSEEK_BASE_URL: str = Field(default=DEFAULT_BASE_URL, description="DeepSeek API 基础 URL")
-    DEEPSEEK_MODEL: str = Field(default=DEFAULT_MODEL, description="默认对话模型")
+    DEEPSEEK_MODEL: str = Field(default=DEFAULT_MODEL, description="默认对话模型（自带 thinking 模式）")
     DEEPSEEK_PROXY: str = Field(default="", description="可选 HTTP 代理（如 http://127.0.0.1:7890）；留空=直连，且忽略系统 socks 代理")

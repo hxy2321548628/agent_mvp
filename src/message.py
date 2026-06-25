@@ -37,9 +37,10 @@ class HumanMessage(Message):
 
 
 class AIMessage(Message):
-    """LLM 输出：content=思考/最终答案文本；tool_calls=工具调用意图。"""
+    """LLM 输出：content=最终答案文本；reasoning_content=DeepSeek 原生推理块；tool_calls=工具调用意图。"""
 
     role: Literal["assistant"] = "assistant"
+    reasoning_content: str = ""  # 思考过程（仅推理模式非空）；带 tool_calls 的轮需回传，否则端点 400
     tool_calls: list[ToolCall] = Field(default_factory=list)
 
 

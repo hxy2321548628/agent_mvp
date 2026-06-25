@@ -11,7 +11,7 @@ import httpx
 from openai import APIConnectionError
 import pytest
 
-from src.config import Settings
+from src.config import REASONING_EFFORT, Settings
 from src.llm.base import EmptyLLMResponseError, LLMInfraError
 from src.llm.deepseek_client import DeepSeekClient, _to_sdk_message
 from src.message import AIMessage, HumanMessage, SystemMessage, ToolCall, ToolMessage
@@ -22,13 +22,13 @@ def _sdk_tool_call(call_id: str, name: str, arguments: str) -> SimpleNamespace:
     return SimpleNamespace(id=call_id, function=SimpleNamespace(name=name, arguments=arguments))
 
 
-def _sdk_completion(content: str, tool_calls: list[SimpleNamespace] | None = None) -> SimpleNamespace:
-    message = SimpleNamespace(content=content, tool_calls=tool_calls)
+def _sdk_completion(content: str, tool_calls: list[SimpleNamespace] | None = None, reasoning_content: str | None = None) -> SimpleNamespace:
+    message = SimpleNamespace(content=content, tool_calls=tool_calls, reasoning_content=reasoning_content)
     return SimpleNamespace(choices=[SimpleNamespace(message=message)])
 
 
-def _sdk_chunk(content: str | None = None, tool_calls: list[SimpleNamespace] | None = None) -> SimpleNamespace:
-    delta = SimpleNamespace(content=content, tool_calls=tool_calls)
+def _sdk_chunk(content: str | None = None, tool_calls: list[SimpleNamespace] | None = None, reasoning_content: str | None = None) -> SimpleNamespace:
+    delta = SimpleNamespace(content=content, tool_calls=tool_calls, reasoning_content=reasoning_content)
     return SimpleNamespace(choices=[SimpleNamespace(delta=delta)])
 
 
@@ -122,6 +122,64 @@ def test_chat_stream_assembles_tool_call_fragments_without_on_token() -> None:
     assert tc.arguments == {"expression": "12*8"}
 
 
+def test_chat_parses_reasoning_content_from_non_stream_response() -> None:
+    """非流式响应应把 message.reasoning_content 解析进 AIMessage.reasoning_content（与 content 分离）。"""
+    client, _ = _client_with(_sdk_completion("答案", reasoning_content="先想一下"))
+    ai = client.chat([HumanMessage(content="x")], tools=None)
+    assert ai.reasoning_content == "先想一下"
+    assert ai.content == "答案"
+
+
+def test_chat_enables_thinking_params_when_reasoning_on() -> None:
+    """reasoning=True 时在同一模型上带上 reasoning_effort 与 thinking extra_body。"""
+    completions = _FakeCompletions(_sdk_completion("答", reasoning_content="想"))
+    sdk = SimpleNamespace(chat=SimpleNamespace(completions=completions))
+    client = DeepSeekClient(client=sdk, model="flash", reasoning_effort="high")
+    ai = client.chat([HumanMessage(content="x")], tools=None, reasoning=True)
+    assert ai.reasoning_content == "想"
+    assert completions.last_kwargs["model"] == "flash"
+    assert completions.last_kwargs["reasoning_effort"] == "high"
+    assert completions.last_kwargs["extra_body"] == {"thinking": {"type": "enabled"}}
+
+
+def test_chat_omits_thinking_params_by_default() -> None:
+    """默认 reasoning=False：不带 reasoning_effort / extra_body，沿用常规模型。"""
+    client, completions = _client_with(_sdk_completion("ok"))
+    client.chat([HumanMessage(content="x")], tools=None)
+    assert "reasoning_effort" not in completions.last_kwargs
+    assert "extra_body" not in completions.last_kwargs
+    assert completions.last_kwargs["model"] == "m"
+
+
+def test_chat_stream_routes_reasoning_and_content_to_separate_sinks() -> None:
+    """流式：reasoning 增量喂 on_reasoning、content 增量喂 on_token，两路分别拼回。"""
+    chunks: Iterator[SimpleNamespace] = iter(
+        [_sdk_chunk(reasoning_content="想"), _sdk_chunk(reasoning_content="一下"), _sdk_chunk(content="答"), _sdk_chunk(content="案")]
+    )
+    client, _ = _client_with(chunks)
+    answer: list[str] = []
+    thinking: list[str] = []
+    ai = client.chat([HumanMessage(content="x")], tools=None, on_token=answer.append, on_reasoning=thinking.append)
+    assert thinking == ["想", "一下"]
+    assert answer == ["答", "案"]
+    assert ai.reasoning_content == "想一下"
+    assert ai.content == "答案"
+
+
+def test_to_sdk_message_round_trips_reasoning_on_tool_call_turn() -> None:
+    """带 tool_calls 的 assistant 消息需回传 reasoning_content（否则推理模式下端点 400）。"""
+    ai = AIMessage(content="", reasoning_content="为何调工具", tool_calls=[ToolCall(id="c1", name="calculator", arguments={})])
+    out = _to_sdk_message(ai)
+    assert out["reasoning_content"] == "为何调工具"
+
+
+def test_to_sdk_message_omits_reasoning_on_final_answer_turn() -> None:
+    """最终答案轮（无 tool_calls）不回传 reasoning_content（省 token，符合官方约定）。"""
+    out = _to_sdk_message(AIMessage(content="答案", reasoning_content="想过了"))
+    assert "reasoning_content" not in out
+    assert out == {"role": "assistant", "content": "答案"}
+
+
 def test_to_sdk_message_serializes_system_and_human() -> None:
     """系统/用户消息应序列化为 role+content 的最简 dict。"""
     assert _to_sdk_message(SystemMessage(content="sys")) == {"role": "system", "content": "sys"}
@@ -194,4 +252,22 @@ def test_real_deepseek_smoke_calculates() -> None:
         pytest.skip("需要真实 DEEPSEEK_API_KEY")
     client = DeepSeekClient.from_credentials(settings.DEEPSEEK_API_KEY, settings.DEEPSEEK_BASE_URL, settings.DEEPSEEK_MODEL, settings.DEEPSEEK_PROXY)
     ai = client.chat([HumanMessage(content="只回答数字：12*8 等于多少？")], tools=None)
+    assert "96" in ai.content
+
+
+@pytest.mark.slow
+def test_real_deepseek_reasoning_smoke() -> None:
+    """@slow 推理冒烟：开启 thinking 后应同时拿到 reasoning_content（思考）与含 96 的答案。"""
+    settings = Settings()
+    if not settings.DEEPSEEK_API_KEY:
+        pytest.skip("需要真实 DEEPSEEK_API_KEY")
+    client = DeepSeekClient.from_credentials(
+        settings.DEEPSEEK_API_KEY,
+        settings.DEEPSEEK_BASE_URL,
+        settings.DEEPSEEK_MODEL,
+        settings.DEEPSEEK_PROXY,
+        reasoning_effort=REASONING_EFFORT,
+    )
+    ai = client.chat([HumanMessage(content="12*8 等于多少？")], tools=None, reasoning=True)
+    assert ai.reasoning_content
     assert "96" in ai.content

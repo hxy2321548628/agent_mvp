@@ -19,11 +19,19 @@ from src.message import AIMessage, Message, ToolCall, ToolMessage
 # 视为可重试的连接期 SDK 异常（网络/超时/限流/5xx）；翻译成项目级 LLMInfraError
 _RETRYABLE_SDK_ERROR = (APIConnectionError, RateLimitError, InternalServerError)
 
+# 开启 DeepSeek 原生推理块（reasoning_content）的 extra_body（thinking 模式开关）
+_THINKING_ENABLED = {"thinking": {"type": "enabled"}}
+DEFAULT_REASONING_EFFORT = "high"  # thinking 模式默认推理强度
+
 
 def _to_sdk_message(msg: Message) -> dict[str, object]:
-    """把内部 Message 转成 chat.completions 期望的消息 dict（含工具调用/结果的回填）。"""
+    """把内部 Message 转成 chat.completions 期望的消息 dict（含工具调用/结果的回填）。
+
+    System/Human/无工具调用的 Assistant 走末尾通用分支（role 即正确角色）；只有带
+    tool_calls 的 Assistant 在推理模式下需回传 reasoning_content，否则端点判 400。
+    """
     if isinstance(msg, AIMessage) and msg.tool_calls:
-        return {
+        out: dict[str, object] = {
             "role": "assistant",
             "content": msg.content,
             "tool_calls": [
@@ -35,6 +43,9 @@ def _to_sdk_message(msg: Message) -> dict[str, object]:
                 for tc in msg.tool_calls
             ],
         }
+        if msg.reasoning_content:  # 带工具调用的轮必须回传推理块，否则 thinking 模式下 400
+            out["reasoning_content"] = msg.reasoning_content
+        return out
     if isinstance(msg, ToolMessage):
         return {"role": "tool", "content": msg.content, "tool_call_id": msg.tool_call_id}
     return {"role": msg.role, "content": msg.content}
@@ -50,10 +61,11 @@ def _parse_arguments(raw_arguments: str) -> dict[str, object]:
 
 
 def _parse_message(message: object) -> AIMessage:
-    """非流式 message → AIMessage（content=思考/答案，tool_calls=动作意图）。"""
+    """非流式 message → AIMessage（content=答案，reasoning_content=思考，tool_calls=动作意图）。"""
     raw_tool_calls = message.tool_calls or []
     tool_calls = [ToolCall(id=tc.id, name=tc.function.name, arguments=_parse_arguments(tc.function.arguments)) for tc in raw_tool_calls]
-    return AIMessage(content=message.content or "", tool_calls=tool_calls)
+    reasoning = getattr(message, "reasoning_content", "") or ""
+    return AIMessage(content=message.content or "", reasoning_content=reasoning, tool_calls=tool_calls)
 
 
 def _merge_tool_delta(fragments: dict[int, dict[str, str]], order: list[int], delta: object) -> None:
@@ -76,9 +88,10 @@ def _build_stream_tool_call(slot: dict[str, str]) -> ToolCall:
     return ToolCall(id=slot["id"], name=slot["name"], arguments=_parse_arguments(slot["arguments"]))
 
 
-def _parse_stream(stream: Iterable[object], on_token: Callable[[str], None]) -> AIMessage:
-    """消费流式分片：content 增量实时喂给 on_token，tool_call 分片按 index 拼回，返回完整 AIMessage。"""
+def _parse_stream(stream: Iterable[object], on_token: Callable[[str], None], on_reasoning: Callable[[str], None] | None) -> AIMessage:
+    """消费流式分片：content 增量喂 on_token、reasoning 增量喂 on_reasoning，tool_call 分片按 index 拼回，返回完整 AIMessage。"""
     content_parts: list[str] = []
+    reasoning_parts: list[str] = []
     fragments: dict[int, dict[str, str]] = {}
     order: list[int] = []
     for chunk in stream:
@@ -86,10 +99,15 @@ def _parse_stream(stream: Iterable[object], on_token: Callable[[str], None]) -> 
         if delta.content:
             content_parts.append(delta.content)
             on_token(delta.content)
+        reasoning = getattr(delta, "reasoning_content", None)
+        if reasoning:
+            reasoning_parts.append(reasoning)
+            if on_reasoning is not None:
+                on_reasoning(reasoning)
         for tool_delta in delta.tool_calls or []:
             _merge_tool_delta(fragments, order, tool_delta)
     tool_calls = [_build_stream_tool_call(fragments[index]) for index in order]
-    return AIMessage(content="".join(content_parts), tool_calls=tool_calls)
+    return AIMessage(content="".join(content_parts), reasoning_content="".join(reasoning_parts), tool_calls=tool_calls)
 
 
 class DeepSeekClient:
@@ -106,12 +124,13 @@ class DeepSeekClient:
         SDK 结构 → 内部 ToolCall/AIMessage 的映射，及 思考/动作/答案 的区分。
     """
 
-    def __init__(self, client: OpenAI, model: str) -> None:
+    def __init__(self, client: OpenAI, model: str, reasoning_effort: str = DEFAULT_REASONING_EFFORT) -> None:
         self._sdk = client
         self._model = model
+        self._reasoning_effort = reasoning_effort
 
     @classmethod
-    def from_credentials(cls, api_key: str, base_url: str, model: str, proxy: str = "") -> Self:
+    def from_credentials(cls, api_key: str, base_url: str, model: str, proxy: str = "", reasoning_effort: str = DEFAULT_REASONING_EFFORT) -> Self:
         """组合根用的便捷构造：自建 OpenAI 客户端后注入（依赖倒置）。
 
         显式构造 httpx 客户端并 trust_env=False：忽略环境里可能不被支持的 socks 代理
@@ -119,25 +138,30 @@ class DeepSeekClient:
         DEEPSEEK_PROXY）显式控制走不走代理——留空即直连。
         """
         http_client = httpx.Client(trust_env=False, proxy=proxy or None)
-        return cls(client=OpenAI(api_key=api_key, base_url=base_url, http_client=http_client), model=model)
+        return cls(client=OpenAI(api_key=api_key, base_url=base_url, http_client=http_client), model=model, reasoning_effort=reasoning_effort)
 
     def chat(
         self,
         messages: list[Message],
         tools: list[dict[str, object]] | None,
         on_token: Callable[[str], None] | None = None,
+        on_reasoning: Callable[[str], None] | None = None,
+        reasoning: bool = False,
     ) -> AIMessage:
-        """调用 DeepSeek 返回完整 AIMessage；on_token 非空时走同步流式逐 token 回调。"""
+        """调用 DeepSeek 返回完整 AIMessage；on_token 非空走同步流式；reasoning 为真开启 thinking 模式。"""
         kwargs: dict[str, object] = {"model": self._model, "messages": [_to_sdk_message(m) for m in messages]}
         if tools:
             kwargs["tools"] = tools
+        if reasoning:  # 同一模型按需开启原生推理块（思考与答案分流）
+            kwargs["reasoning_effort"] = self._reasoning_effort
+            kwargs["extra_body"] = _THINKING_ENABLED
         try:
             if on_token is None:
                 completion = self._sdk.chat.completions.create(**kwargs)
                 ai = _parse_message(completion.choices[0].message)
             else:
                 stream = self._sdk.chat.completions.create(stream=True, **kwargs)
-                ai = _parse_stream(stream, on_token)
+                ai = _parse_stream(stream, on_token, on_reasoning)
         except _RETRYABLE_SDK_ERROR as exc:
             raise LLMInfraError(str(exc)) from exc
         if not ai.content and not ai.tool_calls:  # 空响应视为异常，交 wrap_model_call 重试（DDD §11）
