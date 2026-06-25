@@ -21,3 +21,4 @@ doc/interview
 
 # Per-session run logs
 log/
+tmp/
