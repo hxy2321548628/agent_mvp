@@ -22,6 +22,8 @@ This is a project to implement a minimum viable Agent (ReAct) that can use web s
 
 ### 7. Use mermaid to draw flowcharts
 
+### 8. Reply to me in Chinese
+
 ---
 
 ## Standards Files
