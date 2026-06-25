@@ -81,6 +81,23 @@ def test_state_persisted_after_run() -> None:
     assert [m.content for m in session.get_or_create("w").messages] == ["q", "done"]
 
 
+def test_run_threads_on_token_to_llm() -> None:
+    """on_token 应透传到 RunContext，由运行时交给 llm.chat。"""
+    received: list[Callable[[str], None] | None] = []
+
+    class _Capturing:
+        def chat(self, messages: list[Message], tools: list[dict[str, object]] | None, on_token: Callable[[str], None] | None = None) -> AIMessage:
+            received.append(on_token)
+            return AIMessage(content="ok")
+
+    def sink(_token: str) -> None:
+        return None
+
+    agent, _ = _agent(_Capturing())
+    agent.run("w", "q", on_token=sink)
+    assert received == [sink]
+
+
 def test_state_persisted_even_when_runtime_raises() -> None:
     """runtime 抛异常时 finally 仍落盘：用户输入不丢。"""
 

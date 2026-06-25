@@ -505,11 +505,13 @@ class Agent:
     """装配运行时并暴露简单入口。依赖全部注入（DI）。"""
     def __init__(self, runtime: AgentRuntime, session: SessionManager,
                  registry: ToolRegistry): ...   # run() 不读 settings，故不注入（YAGNI）；CLI 组合根持有 settings
-    def run(self, thread_id: str, user_input: str) -> str:
+    def run(self, thread_id: str, user_input: str,
+            on_token: Callable[[str], None] | None = None) -> str:
         """单次对话入口（持久化在此用 try/finally 保证）:
             state = session.get_or_create(thread_id)
             state.messages.append(HumanMessage(user_input))      # 追加输入
-            ctx = RunContext(state=state, tools_schema=registry.to_schema())
+            ctx = RunContext(state=state, tools_schema=registry.to_schema(),
+                             on_token=on_token)                   # CLI 流式时透传 sink
             try:     return runtime.run(ctx)
             finally: session.save(state)                          # 落盘, 异常也不丢
         """
@@ -520,6 +522,11 @@ class Agent:
 REPL，演示题目场景：`:new` 开新窗口、`:switch <id>`、`:list`、`:trace` 开关日志、`:stream` 开关流式；
 默认注入 `on_token=print` 实现最终答案 token 级实时输出；
 脚本化演示：窗口1「查北京天气并记待办」、窗口2「写周报记待办」，来回切换证明互不影响。
+
+**装配**：`build_agent(settings, toggles)` 是组合根——实例化 `DeepSeekClient`、注册工具（含共享 `TodoStore`）、
+按序组装中间件（`Trace → MaxTurn → Context → Memory → Retry`，MaxTurn 在 Context 前）、建 `InMemoryCheckpointer`，
+注入出 `Agent`。`Toggles(trace_on/stream_on)` 由 REPL 与 `TraceMiddleware` 的 sink **共享**，`:trace`/`:stream` 翻转即时生效。
+`parse_command` 为纯函数、`Repl` 接受注入的 agent/session/sink，二者离线可测；`build_agent`/`main` 是 I/O 与网络装配、不进单测。
 
 ---
 
