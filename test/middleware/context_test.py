@@ -112,6 +112,34 @@ def test_keep_recent_zero_summarizes_everything() -> None:
     assert llm.calls == 1
 
 
+def test_pinned_prefix_survives_compression() -> None:
+    """压缩时钉住前缀（pinned SystemMessage）原样留在最前，摘要只覆盖其后历史。"""
+    llm = _StubLLM("摘要")
+    mw = ContextMiddleware(llm=llm, max_msg=4, keep_recent=2)
+    state = AgentState(thread_id="w1")
+    state.messages.append(SystemMessage(content="系统提示", pinned=True))
+    state.messages.extend(HumanMessage(content=f"m{i}") for i in range(6))
+    ctx = RunContext(state=state)
+    mw.before_model(ctx)
+    messages = ctx.state.messages
+    assert messages[0].content == "系统提示" and messages[0].pinned  # 前缀仍在最前、未被摘要
+    assert isinstance(messages[1], SystemMessage) and "摘要" in messages[1].content  # 摘要插在前缀之后
+    assert [m.content for m in messages[2:]] == ["m4", "m5"]
+
+
+def test_pinned_prefix_not_counted_toward_threshold() -> None:
+    """钉住前缀不计入压缩阈值：前缀 + 恰好阈值条历史时不触发压缩。"""
+    llm = _StubLLM("摘要")
+    mw = ContextMiddleware(llm=llm, max_msg=4, keep_recent=2)
+    state = AgentState(thread_id="w1")
+    state.messages.append(SystemMessage(content="系统提示", pinned=True))
+    state.messages.extend(HumanMessage(content=f"m{i}") for i in range(4))
+    ctx = RunContext(state=state)
+    mw.before_model(ctx)
+    assert len(ctx.state.messages) == 5  # 未压缩：前缀 + 4 条
+    assert llm.calls == 0
+
+
 def test_returns_without_summarizing_when_older_empty() -> None:
     """误配（max_msg < keep_recent）触发但无可摘要内容时，不调用 LLM、不注入垃圾摘要。"""
     llm = _StubLLM("x")

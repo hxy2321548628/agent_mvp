@@ -28,14 +28,22 @@ class ContextMiddleware(Middleware):
         """历史超阈值则压缩；若已被其它中间件请求终止（stop_reason）则短路跳过。"""
         if ctx.stop_reason is not None:
             return
-        messages = ctx.state.messages
-        if len(messages) <= self._max_msg:
+        pinned, rest = self._split_pinned(ctx.state.messages)  # 钉住前缀不计阈值、不被摘要
+        if len(rest) <= self._max_msg:
             return
-        older, recent = self._split_keep_recent(messages)
+        older, recent = self._split_keep_recent(rest)
         if not older:  # 边界对齐/误配导致无可摘要内容时不做无谓压缩
             return
         summary = SystemMessage(content=f"{SUMMARY_PREFIX}{self._summarize(older)}")
-        ctx.state.messages[:] = [summary, *recent]
+        ctx.state.messages[:] = [*pinned, summary, *recent]
+
+    @staticmethod
+    def _split_pinned(messages: list[Message]) -> tuple[list[Message], list[Message]]:
+        """切出 (前导钉住前缀, 其余历史)；钉住前缀整体保留在最前、不参与压缩。"""
+        i = 0
+        while i < len(messages) and isinstance(messages[i], SystemMessage) and messages[i].pinned:
+            i += 1
+        return messages[:i], messages[i:]
 
     def _split_keep_recent(self, messages: list[Message]) -> tuple[list[Message], list[Message]]:
         """切出 (待摘要 older, 保留 recent)；对齐转折边界：recent 不以孤立 ToolMessage 开头。

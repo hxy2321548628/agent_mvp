@@ -1,6 +1,6 @@
 """待办工具 todo.py：内存持久（TodoStore）+ add/list/done，演示"记待办"的简单记忆。
 
-TodoStore 与工具分离：除被 TodoTool 调用外，后续 MemoryMiddleware 也复用它注入未完成提醒。
+TodoStore 与工具分离：除被 TodoTool 调用外，SessionPrefixMiddleware 也复用它注入未完成提醒。
 """
 
 from dataclasses import dataclass, field

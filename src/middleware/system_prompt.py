@@ -1,3 +1,4 @@
+# ruff: noqa: E501  本文件为系统提示词常量，提示段落整体成行、不做换行折行
 # ---------------------< static prompt >---------------------
 
 INTRO_PROMPT01 = """You are an interactive agent that helps users complete their tasks.

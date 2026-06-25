@@ -28,6 +28,7 @@ class SystemMessage(Message):
     """系统消息：角色设定 / 提醒注入。"""
 
     role: Literal["system"] = "system"
+    pinned: bool = False  # 钉住前缀：True 的前导 SystemMessage 不被压缩摘要、会话开始时幂等重注入
 
 
 class HumanMessage(Message):

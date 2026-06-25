@@ -15,7 +15,7 @@ from src.llm.deepseek_client import DeepSeekClient
 from src.middleware.base import Middleware
 from src.middleware.context import ContextMiddleware
 from src.middleware.max_turn import MaxTurnMiddleware
-from src.middleware.memory import MemoryMiddleware
+from src.middleware.prefix import SessionPrefixMiddleware, build_runtime_env
 from src.middleware.retry import RetryMiddleware
 from src.middleware.trace import TraceMiddleware
 from src.runtime import AgentRuntime
@@ -194,10 +194,10 @@ def build_agent(settings: Settings, toggles: Toggles) -> tuple[Agent, SessionMan
             print(line)
 
     middlewares: list[Middleware] = [
+        SessionPrefixMiddleware(todo=todo_store, env=build_runtime_env(settings)),
         TraceMiddleware(sink=trace_sink),
         MaxTurnMiddleware(max_turn=MAX_TURN),
         ContextMiddleware(llm=llm, max_msg=MAX_MSG, keep_recent=KEEP_RECENT),
-        MemoryMiddleware(todo=todo_store),
         RetryMiddleware(max_retry=MAX_RETRY, backoff=BACKOFF),
     ]
     runtime = AgentRuntime(llm=llm, registry=registry, middlewares=middlewares, settings=settings)
