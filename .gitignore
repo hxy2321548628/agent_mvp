@@ -16,3 +16,5 @@ wheels/
 .ruff_cache/
 
 .vscode
+
+doc/interview
