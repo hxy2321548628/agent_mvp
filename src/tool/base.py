@@ -18,5 +18,6 @@ class Tool(Protocol):
     name: str
     description: str
     args_model: type[BaseModel]  # 参数 Schema 来源
+    requires_approval: bool  # 是否需 HITL 授权（默认 False；只读工具可不声明，消费方用 getattr 取，见 DDD §20）
 
     def run(self, args: BaseModel) -> str: ...  # args 为 args_model 的已校验实例

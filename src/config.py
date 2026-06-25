@@ -14,6 +14,8 @@ KEEP_RECENT = 10  # 压缩时保留的最近消息条数
 MAX_RETRY = 2  # LLM/工具 infra 错误的最大退避重试次数（RetryMiddleware）
 BACKOFF = 0.5  # 退避基数秒，第 n 次重试等待 BACKOFF·2^(n-1)（RetryMiddleware）
 STREAM = True  # 是否默认开启流式输出（on_token 实时回调）
+BASH_TIMEOUT = 30  # bash 工具单条命令执行超时秒数
+FETCH_TIMEOUT = 15  # fetch 工具 HTTP 请求超时秒数
 
 
 class Settings(BaseSettings):

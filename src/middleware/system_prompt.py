@@ -90,6 +90,3 @@ Primary working directory: {workdir}
 - Current date: {date}
 """
 
-SUMMERY_PROMPT09 = """When processing tool results, write any important information you may need later into the reply, because the original tool results may be cleared afterwards.
-{summary}
-"""

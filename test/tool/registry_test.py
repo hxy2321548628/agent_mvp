@@ -4,11 +4,17 @@ import pytest
 
 from src.message import ToolMessage
 from src.tool.base import ToolInfraError
+from src.tool.bash import BashTool
 from src.tool.calculator import CalculatorArgs, CalculatorTool
+from src.tool.edit import EditTool
+from src.tool.fetch import FetchTool
+from src.tool.glob import GlobTool
+from src.tool.grep import GrepTool
+from src.tool.read import ReadTool
 from src.tool.registry import ToolRegistry
-from src.tool.search import SearchTool
 from src.tool.todo import TodoStore, TodoTool
 from src.tool.weather import WeatherTool
+from src.tool.write import WriteTool
 
 
 class _FlakyTool:
@@ -39,12 +45,24 @@ def test_to_schema_includes_registered_tool() -> None:
 
 
 def test_to_schema_lists_all_registered_tools() -> None:
-    """注册全部工具后 to_schema 应覆盖每一个（schema 由各自 args_model 生成）。"""
+    """注册全部工具后 to_schema 应覆盖每一个（含二期新增 bash/read/write/edit/glob/grep/fetch）。"""
     registry = ToolRegistry()
-    for tool in (CalculatorTool(), SearchTool(), WeatherTool(), TodoTool(TodoStore())):
+    tools = (
+        CalculatorTool(),
+        FetchTool(),
+        WeatherTool(),
+        TodoTool(TodoStore()),
+        BashTool(),
+        ReadTool(),
+        WriteTool(),
+        EditTool(),
+        GlobTool(),
+        GrepTool(),
+    )
+    for tool in tools:
         registry.register(tool)
     names = {fn["function"]["name"] for fn in registry.to_schema()}
-    assert names == {"calculator", "search", "weather", "todo"}
+    assert names == {"calculator", "fetch", "weather", "todo", "bash", "read", "write", "edit", "glob", "grep"}
 
 
 def test_execute_runs_tool_and_returns_tool_message() -> None:

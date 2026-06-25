@@ -21,11 +21,17 @@ from src.middleware.trace import TraceMiddleware
 from src.runtime import AgentRuntime
 from src.session.checkpointer import InMemoryCheckpointer
 from src.session.manager import SessionManager
+from src.tool.bash import BashTool
 from src.tool.calculator import CalculatorTool
+from src.tool.edit import EditTool
+from src.tool.fetch import FetchTool
+from src.tool.glob import GlobTool
+from src.tool.grep import GrepTool
+from src.tool.read import ReadTool
 from src.tool.registry import ToolRegistry
-from src.tool.search import SearchTool
 from src.tool.todo import TodoStore, TodoTool
 from src.tool.weather import WeatherTool
+from src.tool.write import WriteTool
 
 
 # —— 顶层参数 ——
@@ -186,7 +192,19 @@ def build_agent(settings: Settings, toggles: Toggles) -> tuple[Agent, SessionMan
     llm = DeepSeekClient.from_credentials(settings.DEEPSEEK_API_KEY, settings.DEEPSEEK_BASE_URL, settings.DEEPSEEK_MODEL, settings.DEEPSEEK_PROXY)
     todo_store = TodoStore()
     registry = ToolRegistry()
-    for tool in (CalculatorTool(), SearchTool(), WeatherTool(), TodoTool(todo_store)):
+    tools = (
+        CalculatorTool(),
+        FetchTool(),
+        WeatherTool(),
+        TodoTool(todo_store),
+        BashTool(),
+        ReadTool(),
+        WriteTool(),
+        EditTool(),
+        GlobTool(),
+        GrepTool(),
+    )
+    for tool in tools:
         registry.register(tool)
 
     def trace_sink(line: str) -> None:
