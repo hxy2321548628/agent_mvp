@@ -424,6 +424,7 @@ class ToolRegistry:
 class Checkpointer(Protocol):
     def get(self, thread_id: str) -> AgentState | None: ...
     def put(self, thread_id: str, state: AgentState) -> None: ...
+    def list_threads(self) -> list[str]: ...    # 由存储自身列举，避免 SessionManager 另维护一份易漂移的集合
 
 class InMemoryCheckpointer: ...   # dict[str, AgentState]
 
@@ -503,7 +504,7 @@ Trace 由 `TraceMiddleware` 在 `after_model / before_tool / after_tool` 输出�
 class Agent:
     """装配运行时并暴露简单入口。依赖全部注入（DI）。"""
     def __init__(self, runtime: AgentRuntime, session: SessionManager,
-                 registry: ToolRegistry, settings: Settings): ...
+                 registry: ToolRegistry): ...   # run() 不读 settings，故不注入（YAGNI）；CLI 组合根持有 settings
     def run(self, thread_id: str, user_input: str) -> str:
         """单次对话入口（持久化在此用 try/finally 保证）:
             state = session.get_or_create(thread_id)
