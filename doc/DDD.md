@@ -647,12 +647,12 @@ class SessionPrefixMiddleware(Middleware):
     def on_session_start(self, ctx: RunContext) -> None: ...   # 幂等重注入：先清掉旧前缀再装配，避免追问累积
 ```
 
-- **静态段**来自 `src/middleware/system_prompt.py`（INTRO/SYSTEM/TASK/ACTION/TOOL/STYLE/OUTPUT 按 01→07 序），**动态段** `ENV_PROMPT08` 用 `build_runtime_env(settings)` 采集的运行环境填 `{workdir}/{is_git}/{platform}/{shell}/{os_version}/{model}/{date}`（注入而非中间件自取，便于离线测试）。`SUMMERY_PROMPT09` 含 `{summary}` 占位、属压缩范畴，不进会话起始前缀。
+- **静态段**来自 `src/middleware/system_prompt.py`（INTRO/SYSTEM/TASK/ACTION/TOOL/STYLE/OUTPUT 按 01→07 序），**动态段** `ENV_PROMPT08` 用 `build_runtime_env(settings)` 采集的运行环境填 `{workdir}/{is_git}/{platform}/{shell}/{os_version}/{model}/{date}`（注入而非中间件自取，便于离线测试）。
 - **「钉住前缀」机制（补一期 §10.3 未做项①）**：前缀是 `messages` 最前、`SystemMessage.pinned=True` 的连续若干条（系统提示 + 可选 todo 提醒）。靠 **`pinned` 标记**而非"位置"区分——这样既能让 `ContextMiddleware._split_pinned` 跳过前缀只摘要其后（摘要置于 `[*pinned, summary, *recent]`），又能让 `on_session_start` 的幂等重注入只清掉自己的 pinned 前缀、**不会误删那条非 pinned 的压缩摘要**。前缀每轮重注入，天然自愈。
 
 ## 19. 工具扩展：Bash / 文件工具 + fetch（R4/R9）
 
-仍走 §8 注册式扩展：实现 `Tool` 协议 + `register()`，**不动 runtime/中间件**。`Tool` 协议增一个**默认 `False` 的 `requires_approval`** 字段，供 HITL（§20）读取。
+仍走 §8 注册式扩展：实现 `Tool` 协议 + `register()`，**不动 runtime/中间件**。`Tool` 协议声明 `requires_approval: bool` 供 HITL（§20）读取——**仅 write/edit 显式置 `True`**，其余只读工具不声明，消费方用 `getattr(tool, "requires_approval", False)` 取默认 `False`（避免给每个工具加样板）。
 
 | 工具 | 参数 | 行为 | `requires_approval` |
 |---|---|---|---|
@@ -711,6 +711,6 @@ class ApprovalMiddleware(Middleware):
 
 - `message.py`：`AIMessage.reasoning_content: str = ""`；`SystemMessage.pinned: bool = False`（钉住前缀标记）。
 - `state.py`：`AgentState.created_at`; `RunContext.reasoning: bool`、`RunContext.on_event`。
-- `tool/base.py`：`Tool.requires_approval: bool = False`。
+- `tool/base.py`：`Tool.requires_approval: bool`（仅 write/edit 置 True；消费方 `getattr(..., False)`）。
 - `config.py`：`REASONING_EFFORT`、`LOG_DIR`、`LOG_NAME_MAXLEN`、`DANGER_PATTERN`、`BASH_TIMEOUT`、`FETCH_TIMEOUT`。
 - 装配根（`cli/main.py`）中间件顺序：`SessionPrefix → Log → Trace → MaxTurn → Context → Approval → Retry`（前缀先装配；Approval 在 Retry 外层，先问授权再谈重试）。
