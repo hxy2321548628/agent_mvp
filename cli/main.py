@@ -10,8 +10,10 @@ from dataclasses import dataclass
 from typing import Literal
 
 from src.agent import Agent
-from src.config import BACKOFF, KEEP_RECENT, MAX_MSG, MAX_RETRY, MAX_TURN, STREAM, Settings
+from src.config import BACKOFF, DANGER_PATTERN, KEEP_RECENT, MAX_MSG, MAX_RETRY, MAX_TURN, STREAM, Settings
 from src.llm.deepseek_client import DeepSeekClient
+from src.message import ToolCall
+from src.middleware.approval import ApprovalMiddleware
 from src.middleware.base import Middleware
 from src.middleware.context import ContextMiddleware
 from src.middleware.max_turn import MaxTurnMiddleware
@@ -187,6 +189,12 @@ class Repl:
         return f"未知命令 :{arg}（试试 :help）"
 
 
+def _confirm_tool_call(call: ToolCall) -> bool:
+    """终端征询工具授权：输入 y/yes 允许，其它一律拒绝（P13 升级为彩色可选项）。"""
+    answer = input(f"⚠ 授权工具 {call.name} {call.arguments}？[y/N] ")
+    return answer.strip().lower() in {"y", "yes"}
+
+
 def build_agent(settings: Settings, toggles: Toggles) -> tuple[Agent, SessionManager]:
     """组合根：实例化具体依赖、按序组装中间件，注入出可用的 Agent 与其 SessionManager。"""
     llm = DeepSeekClient.from_credentials(settings.DEEPSEEK_API_KEY, settings.DEEPSEEK_BASE_URL, settings.DEEPSEEK_MODEL, settings.DEEPSEEK_PROXY)
@@ -216,6 +224,7 @@ def build_agent(settings: Settings, toggles: Toggles) -> tuple[Agent, SessionMan
         TraceMiddleware(sink=trace_sink),
         MaxTurnMiddleware(max_turn=MAX_TURN),
         ContextMiddleware(llm=llm, max_msg=MAX_MSG, keep_recent=KEEP_RECENT),
+        ApprovalMiddleware(requires_approval=registry.requires_approval, confirm=_confirm_tool_call, danger_pattern=DANGER_PATTERN),
         RetryMiddleware(max_retry=MAX_RETRY, backoff=BACKOFF),
     ]
     runtime = AgentRuntime(llm=llm, registry=registry, middlewares=middlewares, settings=settings)

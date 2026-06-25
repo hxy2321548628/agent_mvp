@@ -21,6 +21,10 @@ class ToolRegistry:
         """生成喂给 llm.chat 的 tools 参数（OpenAI function calling 格式）。"""
         return [self._function_schema(tool) for tool in self._tool.values()]
 
+    def requires_approval(self, name: str) -> bool:
+        """该工具是否需 HITL 授权（未注册或未声明 → False）。供 ApprovalMiddleware 注入查询。"""
+        return bool(getattr(self._tool.get(name), "requires_approval", False))
+
     def execute(self, name: str, raw_args: dict[str, object], tool_call_id: str) -> ToolMessage:
         """按 args_model 校验 raw_args 并调用 run。
 

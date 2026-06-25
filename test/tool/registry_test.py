@@ -65,6 +65,16 @@ def test_to_schema_lists_all_registered_tools() -> None:
     assert names == {"calculator", "fetch", "weather", "todo", "bash", "read", "write", "edit", "glob", "grep"}
 
 
+def test_requires_approval_reflects_tool_flag() -> None:
+    """requires_approval：write 标注 True、只读工具 False、未知工具 False。"""
+    registry = ToolRegistry()
+    registry.register(WriteTool())
+    registry.register(CalculatorTool())
+    assert registry.requires_approval("write") is True
+    assert registry.requires_approval("calculator") is False
+    assert registry.requires_approval("unknown") is False
+
+
 def test_execute_runs_tool_and_returns_tool_message() -> None:
     """execute 校验参数并调 run，成功时返回非错误 ToolMessage。"""
     msg = _registry_with_calculator().execute("calculator", {"expression": "2+3"}, "c1")

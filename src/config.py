@@ -16,6 +16,20 @@ BACKOFF = 0.5  # 退避基数秒，第 n 次重试等待 BACKOFF·2^(n-1)（Retr
 STREAM = True  # 是否默认开启流式输出（on_token 实时回调）
 BASH_TIMEOUT = 30  # bash 工具单条命令执行超时秒数
 FETCH_TIMEOUT = 15  # fetch 工具 HTTP 请求超时秒数
+# bash 命令命中以下任一正则即需 HITL 授权（破坏/重定向/提权/远端推送等，ApprovalMiddleware 用）
+DANGER_PATTERN = [
+    r"\brm\b",
+    r"\bmv\b",
+    r"\bdd\b",
+    r"\bmkfs\b",
+    r"\bchmod\b",
+    r"\bchown\b",
+    r"\bsudo\b",
+    r"\bkill\b",
+    r">>?",
+    r"\bgit\s+push\b",
+    r"\bgit\s+reset\b",
+]
 
 
 class Settings(BaseSettings):
