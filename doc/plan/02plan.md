@@ -43,7 +43,7 @@ flowchart TD
 | 项 | 内容 |
 |---|---|
 | 目标 | 思考从「content 合体」升级为 DeepSeek 原生 `reasoning_content`；解决带工具调用时的回传 400 |
-| 任务 | `message.py`：`AIMessage.reasoning_content: str=""`；`state.py`：`RunContext.reasoning: bool`；`config.py`：`REASONING_MODEL`/`REASONING_EFFORT`；`deepseek_client.py`：`reasoning` 开启时传 `reasoning_effort`+`extra_body.thinking`、解析/流式**分别累积** content 与 reasoning_content、`_to_sdk_message` 对 **assistant+tool_calls** 回传 `reasoning_content`（见 [DDD §17](../DDD.md)）|
+| 任务 | `message.py`：`AIMessage.reasoning_content: str=""`；`config.py`：`REASONING_EFFORT`；`deepseek_client.py`：`reasoning` 开启时在**同一 flash 模型**上传 `reasoning_effort`+`extra_body.thinking`、解析/流式**分别累积** content 与 reasoning_content、`_to_sdk_message` 对 **assistant+tool_calls** 回传 `reasoning_content`（见 [DDD §17](../DDD.md)）。注：`RunContext.reasoning` 开关字段移到 P13（在 CLI `:think` 处才被使用）|
 | 先写的测试 | 打桩 SDK 响应：`reasoning_content` 与 `content` 各归位；流式两路增量分别回调；`_to_sdk_message`：带 tool_calls 的 AIMessage 含 `reasoning_content`、最终答案轮不含、SystemMessage 仍正确转 system；`@slow` 推理冒烟 |
 | 完成标准 | 离线解析/回传测试绿；推理模式真实可答且不触 400 |
 
@@ -88,7 +88,7 @@ flowchart TD
 | 项 | 内容 |
 |---|---|
 | 目标 | 四通道（用户/工具返回/思考/最终回复）配色区分；`:think` 控推理 |
-| 任务 | `state.py`：`RunContext.on_event`；`deepseek_client.py` 流式把 content→answer、reasoning_content→reasoning 两路喂事件；runtime/中间件 `after_tool` 喂 tool_result 事件；`cli/render.py`（rich 分通道样式）；`cli/main.py`：注入 `on_event`、新增 `:think`、HITL `confirm` 用终端「允许/拒绝/总是允许」选项（见 [DDD §22](../DDD.md)）|
+| 任务 | `state.py`：`RunContext.reasoning`（:think 开关）/`on_event`；`deepseek_client.py` 流式把 content→answer、reasoning_content→reasoning 两路喂事件；runtime/中间件 `after_tool` 喂 tool_result 事件；`cli/render.py`（rich 分通道样式）；`cli/main.py`：注入 `on_event`、新增 `:think`、HITL `confirm` 用终端「允许/拒绝/总是允许」选项（见 [DDD §22](../DDD.md)）|
 | 先写的测试 | `parse_command` 认 `:think`；事件分发到对应通道（注入 fake renderer 断言 kind）；推理关时不喂 reasoning 事件；端到端：一次带工具+推理的对话四通道都被渲染 |
 | 完成标准 | 一条命令跑起来即见分区彩色输出与可切的推理 |
 

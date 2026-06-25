@@ -610,7 +610,7 @@ flowchart TD
 
 题目「提取思考过程」一期是把 `AIMessage.content` 当思考/答案合体；二期改用 DeepSeek **原生推理块**，思考与答案在响应里**字段分离**，更真实也便于 R3 分区显示。
 
-- **开启方式**：`reasoning_effort="high"`（复杂可 `"max"`）+ `extra_body={"thinking": {"type": "enabled"}}`，调用时按需传入；需用**推理型模型**（如 `deepseek-v4-pro`，一期默认 `deepseek-v4-flash` 不带推理）。`config.py` 增 `REASONING_MODEL` / `REASONING_EFFORT`；CLI `:think` 开关写入 `RunContext.reasoning`。
+- **开启方式**：`reasoning_effort="high"`（复杂可 `"max"`）+ `extra_body={"thinking": {"type": "enabled"}}`，调用时按需传入。默认模型 `deepseek-v4-flash` **本身支持 thinking**，**同一模型按 `reasoning` 开关切换有无推理，无需另备推理模型**。`config.py` 增 `REASONING_EFFORT`；CLI `:think` 开关写入 `RunContext.reasoning`。
 - **响应字段**：`message.reasoning_content`（思考）与 `message.content`（答案）同级；流式下 `delta.reasoning_content` 与 `delta.content` **分别累积**。
 - **类型扩展**：`AIMessage` 增 `reasoning_content: str = ""`。`DeepSeekClient.chat` 解析时填两段；`on_token` 拆成「答案增量 sink」与「思考增量 sink」两个回调（或一个带 kind 的结构化事件），透传给 CLI 分通道渲染。
 
@@ -712,5 +712,5 @@ class ApprovalMiddleware(Middleware):
 - `message.py`：`AIMessage.reasoning_content: str = ""`。
 - `state.py`：`AgentState.created_at`; `RunContext.reasoning: bool`、`RunContext.on_event`。
 - `tool/base.py`：`Tool.requires_approval: bool = False`。
-- `config.py`：`REASONING_MODEL`、`REASONING_EFFORT`、`LOG_DIR`、`LOG_NAME_MAXLEN`、`DANGER_PATTERN`、`BASH_TIMEOUT`、`FETCH_TIMEOUT`。
+- `config.py`：`REASONING_EFFORT`、`LOG_DIR`、`LOG_NAME_MAXLEN`、`DANGER_PATTERN`、`BASH_TIMEOUT`、`FETCH_TIMEOUT`。
 - 装配根（`cli/main.py`）中间件顺序：`SessionPrefix → Log → Trace → MaxTurn → Context → Approval → Retry`（前缀先装配；Approval 在 Retry 外层，先问授权再谈重试）。
