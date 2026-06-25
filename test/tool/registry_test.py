@@ -6,6 +6,9 @@ from src.message import ToolMessage
 from src.tool.base import ToolInfraError
 from src.tool.calculator import CalculatorArgs, CalculatorTool
 from src.tool.registry import ToolRegistry
+from src.tool.search import SearchTool
+from src.tool.todo import TodoStore, TodoTool
+from src.tool.weather import WeatherTool
 
 
 class _FlakyTool:
@@ -33,6 +36,15 @@ def test_to_schema_includes_registered_tool() -> None:
     assert fn["type"] == "function"
     assert fn["function"]["name"] == "calculator"
     assert "expression" in fn["function"]["parameters"]["properties"]
+
+
+def test_to_schema_lists_all_registered_tools() -> None:
+    """注册全部工具后 to_schema 应覆盖每一个（schema 由各自 args_model 生成）。"""
+    registry = ToolRegistry()
+    for tool in (CalculatorTool(), SearchTool(), WeatherTool(), TodoTool(TodoStore())):
+        registry.register(tool)
+    names = {fn["function"]["name"] for fn in registry.to_schema()}
+    assert names == {"calculator", "search", "weather", "todo"}
 
 
 def test_execute_runs_tool_and_returns_tool_message() -> None:
