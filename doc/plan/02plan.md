@@ -70,7 +70,7 @@ flowchart TD
 | 项 | 内容 |
 |---|---|
 | 目标 | 有副作用的工具调用前征询授权，拒绝即回灌不中断 |
-| 任务 | 新增 `middleware/approval.py`（`ApprovalMiddleware.wrap_tool_call`：`tool.requires_approval` ∪ bash 命令命中 `DANGER_PATTERN` → 调注入的 `confirm` 回调；拒绝→`is_error` 回灌）；`config.py`：`DANGER_PATTERN`（见 [DDD §20](../DDD.md)）|
+| 任务 | `tool/registry.py`：加 `requires_approval(name)` 查询；新增 `middleware/approval.py`（`ApprovalMiddleware.wrap_tool_call`：注入的 `requires_approval(name)` ∪ bash 命令命中 `DANGER_PATTERN` → 调注入的 `confirm` 回调；拒绝→`is_error` 回灌）；`config.py`：`DANGER_PATTERN`；组合根注入 `registry.requires_approval` 与基本 y/N `confirm`（见 [DDD §20](../DDD.md)）|
 | 先写的测试 | write/edit 触发征询；bash `rm -rf`/`>` 触发、`ls`/`cat` 放行；只读工具放行；`confirm` 返 False→`is_error('用户拒绝授权')` 且 loop 继续；fake confirm 离线可测 |
 | 完成标准 | 授权逻辑全在中间件；`src/` 不做终端 I/O（confirm 注入）|
 

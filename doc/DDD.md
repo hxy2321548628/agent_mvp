@@ -674,20 +674,22 @@ class SessionPrefixMiddleware(Middleware):
 ```python
 class ApprovalMiddleware(Middleware):
     """有副作用的工具调用前向用户征询授权（环绕钩子）。
-    判定 = 工具级标注 ∪ bash 命令模式：
-      · tool.requires_approval 为 True（write/edit）→ 需授权；
+    判定 = 工具级标注 ∪ bash 命令模式（中间件只拿到 ToolCall，故工具标注经注入的
+    requires_approval(name) 查询，而非直接读 tool）：
+      · requires_approval(name) 为 True（write/edit）→ 需授权；
       · 工具是 bash 且 command 命中危险模式(rm/mv/dd/>/>>/git push/chmod…) → 需授权；
       · 其余只读工具(read/glob/grep/fetch/calculator…) → 放行。
     征询经注入的 confirm 回调；拒绝 → 回灌 is_error ToolMessage('用户拒绝授权')，loop 继续。
     """
-    def __init__(self, confirm: Callable[[ToolCall], bool], danger_pattern: list[str]): ...
+    def __init__(self, requires_approval: Callable[[str], bool],  # 注入 registry.requires_approval
+                 confirm: Callable[[ToolCall], bool], danger_pattern: list[str]): ...
     def wrap_tool_call(self, ctx, handler):
         if self._needs_approval(ctx.current_tool_call) and not self._confirm(ctx.current_tool_call):
             return ToolMessage(content="用户拒绝授权", tool_call_id=ctx.current_tool_call.id, is_error=True)
         return handler(ctx)
 ```
 
-- **依赖倒置**：`confirm` 回调由**装配根（CLI）注入**（终端弹「允许/拒绝/总是允许」选项），`src/` 不做终端 I/O；离线测试注入 fake（恒真/恒假）。
+- **依赖倒置**：`requires_approval`（=`ToolRegistry.requires_approval`）与 `confirm` 回调均由**装配根（CLI）注入**；`src/` 不做终端 I/O；离线测试注入 fake（恒真/恒假）。P11 的 CLI `confirm` 先用基本 y/N 输入，P13 升级为彩色「允许/拒绝/总是允许」选项。
 - **拒绝即回灌**：被拒不是异常、不中断 loop——回灌 `is_error`，让 LLM 改走别的路（ReAct 自愈）。
 - **危险命令模式**清单为顶层参数（`config.py`），便于调。
 
