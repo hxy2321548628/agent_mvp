@@ -209,6 +209,35 @@ agent_mvp/
 | [doc/PRD.md](doc/PRD.md) | 产品需求（面试原题 + 第二阶段 9 项工程化需求） |
 | [doc/plan/](doc/plan/) | 分阶段 TDD 实施计划 |
 
+## 🔗 相似项目 / Related Work
+
+「从零写 Agent」的开源项目不少，但多数要么是**极简到只剩主循环**，要么是**完整框架/成品**。本项目卡在中间：**不做框架，却带完整的中间件生命周期 + 多窗口会话 + 上下文压缩 + HITL 授权**，定位更接近「一个带注释、可当教学样本的 mini coding agent」。下表为同类项目对照（⭐为 2026-06 快照）。
+
+### 最接近 —— 从零手写的极简 coding agent
+
+| 项目 | Star | 与本项目的关系 |
+|---|---:|---|
+| [SWE-agent/mini-swe-agent](https://github.com/SWE-agent/mini-swe-agent) | ⭐5.4k | 刻意压到 ~100 行、零框架的主循环；比本项目更极端地求「最小」，无中间件/会话抽象 |
+| [gptme/gptme](https://github.com/gptme/gptme) | ⭐4.3k | 终端内本地 agent，shell/python/文件工具，理念高度一致；工程更杂，无可插拔中间件 |
+| [huggingface/smolagents](https://github.com/huggingface/smolagents) | ⭐28k | 极简、code-as-action 的 agent 库；本质是**框架**（本项目刻意不做框架） |
+
+### 较接近 —— 教学向「从零实现 Agent 范式」
+
+| 项目 | Star | 与本项目的关系 |
+|---|---:|---|
+| [anthropics/claude-cookbooks](https://github.com/anthropics/claude-cookbooks)（含 *Building Effective Agents*） | ⭐46k | 只给「主循环 + 工具」范式、不给框架，与本项目设计理念一致 |
+| [openai/swarm](https://github.com/openai/swarm) → [openai/openai-agents-python](https://github.com/openai/openai-agents-python) | ⭐22k / ⭐27k | 极简、教育性，暴露主循环与 handoff；Swarm 已被 Agents SDK 取代 |
+| [langchain-ai/langchain-academy](https://github.com/langchain-ai/langchain-academy) | ⭐2.7k | 同讲「从零搭」；LangChain 的 **agent middleware** 正是本项目中间件思想的来源之一 |
+
+### 同类但更重 —— 完整成品/框架（本项目刻意避开）
+
+| 项目 | Star | 说明 |
+|---|---:|---|
+| [OpenHands/OpenHands](https://github.com/OpenHands/OpenHands) | ⭐78k | 完整 autonomous coding agent 平台 |
+| [openinterpreter/openinterpreter](https://github.com/openinterpreter/openinterpreter) | ⭐64k | 在终端里跑代码的通用 agent |
+| [Aider-AI/aider](https://github.com/Aider-AI/aider) | ⭐47k | 终端结对编程，成熟产品 |
+| [Significant-Gravitas/AutoGPT](https://github.com/Significant-Gravitas/AutoGPT) · [yoheinakajima/babyagi](https://github.com/yoheinakajima/babyagi) | ⭐185k / ⭐22k | 早期自主 agent 范式开创者，体量远超 MVP |
+
 ## 🗺 局限与演进
 
 这是一个**边界清晰的 MVP**，刻意把「ReAct 骨架 + 可插拔中间件 + 干净扩展点」做扎实，而把下列能力列为演进项：长期 / 跨会话记忆与向量召回、强持久化（当前为内存）、动态任务规划、并行工具与缓存、工具沙箱与评测回归。详见 [09 局限与演进](doc/agent-design/09-limitation-and-evolution.md)。
