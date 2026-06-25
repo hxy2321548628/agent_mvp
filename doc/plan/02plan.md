@@ -52,7 +52,7 @@ flowchart TD
 | 项 | 内容 |
 |---|---|
 | 目标 | SystemPrompt+Memory 合并为一个会话前缀注入；压缩不再吃掉系统提示 |
-| 任务 | 新增 `middleware/prefix.py`（`SessionPrefixMiddleware`：`on_session_start` 拼**静态 01–09 + 动态 ENV + 未完成 todo 提醒**并置顶、幂等重注入）；删除 `middleware/memory.py` 的旧职责并入；`middleware/context.py`：`_split_keep_recent` **跳过前导连续 SystemMessage（钉住前缀）**（见 [DDD §18](../DDD.md)）|
+| 任务 | `message.py`：`SystemMessage.pinned`；新增 `middleware/prefix.py`（`SessionPrefixMiddleware`：`on_session_start` 拼**静态 01–07 + 动态 ENV08 + 未完成 todo 提醒**并以 pinned 置顶、幂等重注入；`build_runtime_env(settings)` 采集环境）；删除 `middleware/memory.py` 的旧职责并入；`middleware/context.py`：`_split_pinned` **跳过 pinned 前缀**只摘要其后（见 [DDD §18](../DDD.md)）|
 | 先写的测试 | 前缀含系统提示 + 动态环境 + todo 提醒且置顶；追问二次 `on_session_start` **不重复累积**（幂等）；超阈值压缩**保留钉住前缀**、只摘要其后历史；无 todo 时不注提醒 |
 | 完成标准 | 装配根用 `SessionPrefix` 取代 `Memory`；压缩后前缀仍在 |
 
@@ -123,7 +123,7 @@ flowchart TD
 | 推理 + 工具调用未回传 `reasoning_content` → 400 | `_to_sdk_message` 对 assistant+tool_calls 回传；P8 专门测此用例 |
 | bash/文件工具越权或误删 | HITL（P11）作唯一副作用闸门；危险模式清单可配；沙箱列进阶项 |
 | fetch 抓任意 URL 的安全/超时 | 只抓用户提供 URL（与 INTRO_PROMPT01 一致）；超时→`ToolInfraError` 重试；打桩离线测 |
-| 钉住前缀与破坏性压缩边界 | `_split_keep_recent` 跳过前导 SystemMessage；P9 专测「压缩保前缀」 |
+| 钉住前缀与破坏性压缩边界 | `_split_pinned` 按 pinned 标记切走前缀；P9 专测「压缩保前缀」 |
 | 工具暴增致测试/覆盖率压力 | 每工具小而纯、单测独立；I/O 用打桩；遵守 ≤50 行 |
 | `src/` 被 CLI I/O 污染（授权/渲染）| 一律注入回调（confirm/on_event），`src/` 不直接读终端 |
 

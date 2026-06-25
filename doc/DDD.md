@@ -640,15 +640,15 @@ if isinstance(msg, AIMessage) and msg.tool_calls:
 ```python
 class SessionPrefixMiddleware(Middleware):
     """会话前缀装配：on_session_start 拼「钉住前缀」并置顶。
-    顺序：[系统提示(静态 01–09 + 动态 ENV)] + [未完成 todo 提醒]。
-    依赖注入 settings(填 ENV 动态段) 与 TodoStore(召回提醒)。
+    顺序：[系统提示(静态 01–07 + 动态 ENV08)] + [未完成 todo 提醒]，均标 pinned=True。
+    注入 TodoStore(召回提醒) 与已采集的 env(由组合根 build_runtime_env(settings) 提供)。
     """
-    def __init__(self, settings: Settings, todo: TodoStore): ...
+    def __init__(self, todo: TodoStore, env: dict[str, str]): ...
     def on_session_start(self, ctx: RunContext) -> None: ...   # 幂等重注入：先清掉旧前缀再装配，避免追问累积
 ```
 
-- **静态段**来自 `src/middleware/system_prompt.py`（INTRO/SYSTEM/TASK/ACTION/TOOL/STYLE/OUTPUT 按 01→07 序），**动态段** `ENV_PROMPT08` 用 settings/运行环境填 `{workdir}/{is_git}/{platform}/{shell}/{os_version}/{model}/{date}`。
-- **「钉住前缀」机制（补一期 §10.3 未做项①）**：前缀是一段连续的、置于 `messages` 最前的 `SystemMessage`；`ContextMiddleware` 压缩时**跳过这段前缀**，只摘要其后的对话。实现上约定「前导连续 `SystemMessage` 即钉住前缀」，`_split_keep_recent` 从前缀之后开始切分；前缀每轮 `on_session_start` 幂等重注入，天然自愈。
+- **静态段**来自 `src/middleware/system_prompt.py`（INTRO/SYSTEM/TASK/ACTION/TOOL/STYLE/OUTPUT 按 01→07 序），**动态段** `ENV_PROMPT08` 用 `build_runtime_env(settings)` 采集的运行环境填 `{workdir}/{is_git}/{platform}/{shell}/{os_version}/{model}/{date}`（注入而非中间件自取，便于离线测试）。`SUMMERY_PROMPT09` 含 `{summary}` 占位、属压缩范畴，不进会话起始前缀。
+- **「钉住前缀」机制（补一期 §10.3 未做项①）**：前缀是 `messages` 最前、`SystemMessage.pinned=True` 的连续若干条（系统提示 + 可选 todo 提醒）。靠 **`pinned` 标记**而非"位置"区分——这样既能让 `ContextMiddleware._split_pinned` 跳过前缀只摘要其后（摘要置于 `[*pinned, summary, *recent]`），又能让 `on_session_start` 的幂等重注入只清掉自己的 pinned 前缀、**不会误删那条非 pinned 的压缩摘要**。前缀每轮重注入，天然自愈。
 
 ## 19. 工具扩展：Bash / 文件工具 + fetch（R4/R9）
 
@@ -709,7 +709,7 @@ class ApprovalMiddleware(Middleware):
 
 ## 23. 类型/配置增量小结
 
-- `message.py`：`AIMessage.reasoning_content: str = ""`。
+- `message.py`：`AIMessage.reasoning_content: str = ""`；`SystemMessage.pinned: bool = False`（钉住前缀标记）。
 - `state.py`：`AgentState.created_at`; `RunContext.reasoning: bool`、`RunContext.on_event`。
 - `tool/base.py`：`Tool.requires_approval: bool = False`。
 - `config.py`：`REASONING_EFFORT`、`LOG_DIR`、`LOG_NAME_MAXLEN`、`DANGER_PATTERN`、`BASH_TIMEOUT`、`FETCH_TIMEOUT`。
