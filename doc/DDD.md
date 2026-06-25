@@ -327,7 +327,13 @@ class LLMClient(Protocol):
     """
     def chat(self, messages: list[Message], tools: list[dict] | None,
              on_token: Callable[[str], None] | None = None) -> AIMessage: ...
+
+
+class LLMInfraError(Exception): ...           # 网络/超时/限流，与 ToolInfraError 对称，供 wrap_model_call 重试
+class EmptyLLMResponseError(LLMInfraError): ...  # 空响应（content 与 tool_calls 同时为空），继承以复用同一重试路径
 ```
+
+> `DeepSeekClient` 把 SDK 异常翻译成 `LLMInfraError`、把空响应翻译成 `EmptyLLMResponseError`，使 `RetryMiddleware` 只依赖项目级异常、不依赖具体 SDK（见 [§11](#11-异常处理与-trace)）。
 
 ### 7.2 实现 `llm/deepseek_client.py`（function calling 原理写进 docstring）
 
@@ -465,7 +471,9 @@ class SessionManager:
 
 `ContextMiddleware`：消息数 > `MAX_MSG` 时保留最近 `KEEP_RECENT` 条，更早对话用 LLM 摘要成一条 `SystemMessage` 置顶，并**原地替换掉早期历史**（破坏性）。
 - 取舍：省 token 与存储；代价是丢失早期逐字内容（"记住状态"退化为"记住摘要"）。MVP 接受此取舍，复杂/可逆压缩本期不做。
+- **边界对齐（已实现）**：切分点对齐到对话转折——`recent` 不以孤立 `ToolMessage` 开头（其 `AIMessage(tool_calls)` 若被摘要走会让工具结果失去归属，OpenAI 兼容端点判 400），边界处的 `ToolMessage` 整体并回 older 一起摘要。
 - 注：摘要自身的那次 `llm.chat` 不经 `wrap_model_call`（不重试）；压缩后的历史即 `SessionManager` 持久化的内容。
+- **本期未做（P7/后续）**：① 前导"角色设定"`SystemMessage`（§10.1 [1]）的钉住保护——目前 `agent.py` 未接入角色 system，破坏性摘要会把任何前导 `SystemMessage`（含 `MemoryMiddleware` 提醒，但其每轮 `on_session_start` 会重注入而自愈）一并摘要；接入角色 system 时需把前导 `SystemMessage` 钉在摘要之外。② 旧摘要会随新一轮压缩被再摘要（摘要的摘要），属上面"破坏性"取舍范畴，不做可逆/分级压缩。
 
 ---
 
@@ -473,8 +481,8 @@ class SessionManager:
 
 | 层 | 异常 | 处理 |
 |---|---|---|
-| LLM 调用 | 网络/超时/限流 | `RetryMiddleware.wrap_model_call` 指数退避重试 N 次；仍失败→runtime 兜底友好错误，**保留会话状态** |
-| LLM 输出 | `content` 与 `tool_calls` 同时为空 | 视为异常，重试一次 |
+| LLM 调用 | 网络/超时/限流 | `DeepSeekClient` 把 SDK 异常翻译成项目级 `LLMInfraError`（与 `ToolInfraError` 对称，使中间件不依赖 SDK）→ `RetryMiddleware.wrap_model_call` 指数退避重试 N 次；仍失败→保留会话状态后上抛 |
+| LLM 输出 | `content` 与 `tool_calls` 同时为空 | `DeepSeekClient` 抛 `EmptyLLMResponseError`（`LLMInfraError` 子类）→ `wrap_model_call` 退避重试 |
 | 参数解析 | `arguments` 非法 JSON / 不匹配 schema | 包成 `ToolMessage(is_error=True)` 回灌，让 LLM 自纠 |
 | 工具执行(逻辑) | 除零/参数非法/未知工具 | `registry.execute` 捕获→`ToolMessage(is_error=True)` 回灌，**不重试、不中断** |
 | 工具执行(infra) | 超时/网络（真实 API 工具）| 抛 `ToolInfraError`→`wrap_tool_call` 重试；耗尽→runtime 兜底成 `is_error` 回灌 |

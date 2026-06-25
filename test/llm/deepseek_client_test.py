@@ -7,9 +7,12 @@ from collections.abc import Iterator
 import json
 from types import SimpleNamespace
 
+import httpx
+from openai import APIConnectionError
 import pytest
 
 from src.config import Settings
+from src.llm.base import EmptyLLMResponseError, LLMInfraError
 from src.llm.deepseek_client import DeepSeekClient, _to_sdk_message
 from src.message import AIMessage, HumanMessage, SystemMessage, ToolCall, ToolMessage
 
@@ -140,6 +143,41 @@ def test_to_sdk_message_serializes_tool_result() -> None:
     """工具结果消息应序列化为 role=tool 且带 tool_call_id。"""
     out = _to_sdk_message(ToolMessage(content="96", tool_call_id="c1"))
     assert out == {"role": "tool", "content": "96", "tool_call_id": "c1"}
+
+
+class _RaisingCompletions:
+    """create 抛 SDK 连接错误，用于验证客户端翻译成 LLMInfraError。"""
+
+    def create(self, **kwargs: object) -> object:
+        raise APIConnectionError(request=httpx.Request("POST", "http://x"))
+
+
+def test_chat_wraps_sdk_connection_error_as_llm_infra_error() -> None:
+    """SDK 连接期异常应被翻译成项目级 LLMInfraError，供 RetryMiddleware 识别。"""
+    sdk = SimpleNamespace(chat=SimpleNamespace(completions=_RaisingCompletions()))
+    client = DeepSeekClient(client=sdk, model="m")
+    with pytest.raises(LLMInfraError):
+        client.chat([HumanMessage(content="x")], tools=None)
+
+
+def test_chat_raises_on_empty_non_stream_response() -> None:
+    """非流式响应 content 与 tool_calls 同时为空时应抛 EmptyLLMResponseError（交重试）。"""
+    client, _ = _client_with(_sdk_completion("", None))
+    with pytest.raises(EmptyLLMResponseError):
+        client.chat([HumanMessage(content="x")], tools=None)
+
+
+def test_chat_raises_on_empty_stream_response() -> None:
+    """流式响应全程无 content、无 tool_calls 时同样应抛 EmptyLLMResponseError。"""
+    chunks: Iterator[SimpleNamespace] = iter([_sdk_chunk(content=None), _sdk_chunk(content="")])
+    client, _ = _client_with(chunks)
+    with pytest.raises(EmptyLLMResponseError):
+        client.chat([HumanMessage(content="x")], tools=None, on_token=lambda _t: None)
+
+
+def test_empty_response_error_is_retryable() -> None:
+    """EmptyLLMResponseError 应是 LLMInfraError 子类，从而被 wrap_model_call 重试路径覆盖。"""
+    assert issubclass(EmptyLLMResponseError, LLMInfraError)
 
 
 @pytest.mark.slow

@@ -10,6 +10,8 @@ DEFAULT_BASE_URL = "https://api.deepseek.com"  # DeepSeek（OpenAI 兼容）API 
 MAX_TURN = 10  # 单次 run 的最大循环轮数（MaxTurnMiddleware 据此终止）
 MAX_MSG = 40  # 触发上下文压缩的消息条数阈值（ContextMiddleware）
 KEEP_RECENT = 10  # 压缩时保留的最近消息条数
+MAX_RETRY = 2  # LLM/工具 infra 错误的最大退避重试次数（RetryMiddleware）
+BACKOFF = 0.5  # 退避基数秒，第 n 次重试等待 BACKOFF·2^(n-1)（RetryMiddleware）
 STREAM = True  # 是否默认开启流式输出（on_token 实时回调）
 
 

@@ -9,9 +9,14 @@ from collections.abc import Callable, Iterable
 import json
 from typing import Self
 
-from openai import OpenAI
+from openai import APIConnectionError, InternalServerError, OpenAI, RateLimitError
 
+from src.llm.base import EmptyLLMResponseError, LLMInfraError
 from src.message import AIMessage, Message, ToolCall, ToolMessage
+
+
+# 视为可重试的连接期 SDK 异常（网络/超时/限流/5xx）；翻译成项目级 LLMInfraError
+_RETRYABLE_SDK_ERROR = (APIConnectionError, RateLimitError, InternalServerError)
 
 
 def _to_sdk_message(msg: Message) -> dict[str, object]:
@@ -119,8 +124,15 @@ class DeepSeekClient:
         kwargs: dict[str, object] = {"model": self._model, "messages": [_to_sdk_message(m) for m in messages]}
         if tools:
             kwargs["tools"] = tools
-        if on_token is None:
-            completion = self._sdk.chat.completions.create(**kwargs)
-            return _parse_message(completion.choices[0].message)
-        stream = self._sdk.chat.completions.create(stream=True, **kwargs)
-        return _parse_stream(stream, on_token)
+        try:
+            if on_token is None:
+                completion = self._sdk.chat.completions.create(**kwargs)
+                ai = _parse_message(completion.choices[0].message)
+            else:
+                stream = self._sdk.chat.completions.create(stream=True, **kwargs)
+                ai = _parse_stream(stream, on_token)
+        except _RETRYABLE_SDK_ERROR as exc:
+            raise LLMInfraError(str(exc)) from exc
+        if not ai.content and not ai.tool_calls:  # 空响应视为异常，交 wrap_model_call 重试（DDD §11）
+            raise EmptyLLMResponseError("LLM 返回空响应：content 与 tool_calls 同时为空")
+        return ai
