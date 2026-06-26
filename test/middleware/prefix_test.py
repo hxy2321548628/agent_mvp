@@ -14,7 +14,7 @@ _ENV = {
     "platform": "Linux",
     "shell": "/bin/bash",
     "os_version": "Linux-6.17",
-    "model": "deepseek-v4-flash",
+    "model": "deepseek-v4-pro",
     "date": "2026-06-25",
 }
 

@@ -5,7 +5,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 # —— 顶层参数（集中管理，便于调参；不要硬编码进函数）——
-DEFAULT_MODEL = "deepseek-v4-flash"  # 默认对话模型（自带 thinking 模式，按 :think 开关）
+DEFAULT_MODEL = "deepseek-v4-pro"  # 默认对话模型（自带 thinking 模式，按 :think 开关）
 DEFAULT_BASE_URL = "https://api.deepseek.com"  # DeepSeek（OpenAI 兼容）API 基础 URL
 REASONING_EFFORT = "high"  # 开启 thinking 时的推理强度：high / max
 MAX_TURN = 10  # 单次 run 的最大循环轮数（MaxTurnMiddleware 据此终止）

@@ -102,7 +102,7 @@ cp .env.example .env            # 然后编辑 .env 填入真实 API Key
 ```ini
 DEEPSEEK_API_KEY=your-deepseek-api-key
 DEEPSEEK_BASE_URL=https://api.deepseek.com
-DEEPSEEK_MODEL=deepseek-v4-flash
+DEEPSEEK_MODEL=deepseek-v4-pro
 # 可选：本地有 Clash/V2Ray 等代理时填其 HTTP 端口；留空=直连
 # DEEPSEEK_PROXY=http://127.0.0.1:7890
 ```

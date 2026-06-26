@@ -97,7 +97,7 @@ def chat(self, messages, tools, on_token=None, on_reasoning=None, reasoning=Fals
 
 ### 推理模式：同一个模型，按开关切换
 
-`reasoning=True` 时，`chat` 给请求加上 `reasoning_effort` 与 `extra_body={"thinking": {"type": "enabled"}}`（[deepseek_client.py:155](../../src/llm/deepseek_client.py#L143)）。注意**不需要另备一个「推理模型」**——默认模型 `deepseek-v4-flash` 本身支持 thinking，同一模型按 `reasoning` 开关切换有无推理块。CLI 的 `:think` 命令就是翻转这个开关（见 [06](06-cross-cutting.md)）。
+`reasoning=True` 时，`chat` 给请求加上 `reasoning_effort` 与 `extra_body={"thinking": {"type": "enabled"}}`（[deepseek_client.py:155](../../src/llm/deepseek_client.py#L143)）。注意**不需要另备一个「推理模型」**——默认模型 `deepseek-v4-pro` 本身支持 thinking，同一模型按 `reasoning` 开关切换有无推理块。CLI 的 `:think` 命令就是翻转这个开关（见 [06](06-cross-cutting.md)）。
 
 ### 空响应也是一种 infra 错误
 
