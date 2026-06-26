@@ -9,11 +9,11 @@ from cli.repl import Repl, Toggles, ToolApproval
 from src.agent import Agent
 from src.config import Settings
 from src.llm.base import Usage
-from src.message import AIMessage, Message, ToolCall
 from src.runtime import AgentRuntime
+from src.schema.message import AIMessage, Message, ToolCall
+from src.schema.state import Event
 from src.session.checkpointer import InMemoryCheckpointer
 from src.session.manager import SessionManager
-from src.state import Event
 from src.tool.calculator import CalculatorTool
 from src.tool.registry import ToolRegistry
 

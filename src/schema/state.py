@@ -9,7 +9,7 @@ from uuid import uuid4
 from pydantic import BaseModel, Field
 
 from src.llm.base import Usage
-from src.message import Message, ToolCall, ToolMessage
+from src.schema.message import Message, ToolCall, ToolMessage
 
 
 # —— 顶层参数 ——

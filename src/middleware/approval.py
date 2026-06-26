@@ -8,9 +8,9 @@ src 不做终端 I/O（依赖倒置，离线注入 fake 即可测）。
 from collections.abc import Callable
 import re
 
-from src.message import ToolCall, ToolMessage
 from src.middleware.base import Middleware, ToolHandler
-from src.state import RunContext
+from src.schema.message import ToolCall, ToolMessage
+from src.schema.state import RunContext
 from src.tool.bash import TOOL_NAME as BASH_TOOL_NAME
 
 

@@ -6,7 +6,7 @@
 
 from rich.console import Console
 
-from src.state import Event, EventKind
+from src.schema.state import Event, EventKind
 
 
 # —— 顶层参数：四通道样式 / 前缀标签 / 流式通道 ——

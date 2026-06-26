@@ -1,8 +1,8 @@
 """middleware/base 模块测试：默认顺序钩子无副作用、环绕钩子默认透传。"""
 
-from src.message import AIMessage, ToolMessage
 from src.middleware.base import Middleware
-from src.state import AgentState, RunContext
+from src.schema.message import AIMessage, ToolMessage
+from src.schema.state import AgentState, RunContext
 
 
 SEQUENTIAL_HOOKS = [

@@ -4,7 +4,7 @@
 
 ## 4.1 消息：用 role 区分角色的一棵小继承树
 
-[message.py](../../src/message.py) 定义了对话的基本单位。基类 `Message` 只有 `role` + `content`，四个子类各司其职：
+[message.py](../../src/schema/message.py) 定义了对话的基本单位。基类 `Message` 只有 `role` + `content`，四个子类各司其职：
 
 ```mermaid
 classDiagram
@@ -31,7 +31,7 @@ classDiagram
 
 ## 4.2 双态：AgentState（持久） vs RunContext（瞬态）
 
-这是新人最容易混淆、却最重要的一对概念。[state.py](../../src/state.py) 里有两个状态类，**职责完全不同**：
+这是新人最容易混淆、却最重要的一对概念。[state.py](../../src/schema/state.py) 里有两个状态类，**职责完全不同**：
 
 | | `AgentState` | `RunContext` |
 |---|---|---|

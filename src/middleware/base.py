@@ -2,8 +2,8 @@
 
 from collections.abc import Callable
 
-from src.message import AIMessage, ToolMessage
-from src.state import RunContext
+from src.schema.message import AIMessage, ToolMessage
+from src.schema.state import RunContext
 
 
 # 环绕钩子里 handler 代表"内层（下一个中间件或真实调用）"

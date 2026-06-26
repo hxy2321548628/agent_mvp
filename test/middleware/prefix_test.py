@@ -1,11 +1,11 @@
 """middleware/prefix 模块测试：会话前缀装配（系统提示 + 环境 + todo 提醒）与幂等重注入。"""
 
 from src.config import Settings
-from src.message import HumanMessage, SystemMessage
 from src.middleware.prefix import SessionPrefixMiddleware, build_runtime_env
-from src.middleware.system_prompt import INTRO_PROMPT01
-from src.state import AgentState, RunContext
+from src.schema.message import HumanMessage, SystemMessage
+from src.schema.state import AgentState, RunContext
 from src.tool.todo import TodoStore
+from src.util.system_prompt import INTRO_PROMPT01
 
 
 _ENV = {

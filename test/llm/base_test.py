@@ -3,7 +3,7 @@
 from collections.abc import Callable
 
 from src.llm.base import LLMClient
-from src.message import AIMessage, HumanMessage, Message
+from src.schema.message import AIMessage, HumanMessage, Message
 
 
 class _EchoLLM:

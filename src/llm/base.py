@@ -5,7 +5,7 @@ from typing import Protocol
 
 from pydantic import BaseModel
 
-from src.message import AIMessage, Message
+from src.schema.message import AIMessage, Message
 
 
 class LLMInfraError(Exception):

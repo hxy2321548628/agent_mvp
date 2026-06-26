@@ -2,7 +2,7 @@
 
 import pytest
 
-from src.message import ToolMessage
+from src.schema.message import ToolMessage
 from src.tool.base import ToolInfraError
 from src.tool.bash import BashTool
 from src.tool.calculator import CalculatorArgs, CalculatorTool

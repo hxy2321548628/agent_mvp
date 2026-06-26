@@ -10,10 +10,11 @@ framework for building agents, so there are **no graph/node abstractions**.
 
 > Singular names; key parameters live in `config.py`, never hardcoded inside functions.
 
-- `message.py` / `state.py` — message types; `AgentState` (persisted) + `RunContext` (per-run).
+- `schema/` — data definitions only (no behavior): `message.py` (message types) + `state.py` (`AgentState` persisted + `RunContext` per-run).
 - `llm/` — `LLMClient` protocol + DeepSeek implementation (function calling, streaming).
 - `tool/` — `Tool` protocol, `ToolRegistry`, and the concrete tools.
-- `middleware/` — `Middleware` base (6 lifecycle hooks + 2 wrap hooks) and concrete middleware.
+- `middleware/` — **pure**: `Middleware` base (6 lifecycle hooks + 2 wrap hooks) + the concrete `*Middleware` classes only.
+- `util/` — non-middleware helpers: `stack.py` (`build_middlewares` assembly), `system_prompt.py` (prompt constants), `event.py` (lifecycle-event formatting for Trace/Log).
 - `runtime.py` — `AgentRuntime`: the ReAct main loop that fires the lifecycle hooks.
 - `session/` — `Checkpointer` + `SessionManager` (per-`thread_id` isolation & persistence).
 - `agent.py` — top-level `Agent`; wires everything and exposes `run(thread_id, user_input)`.

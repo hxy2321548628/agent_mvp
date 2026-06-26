@@ -1,6 +1,6 @@
 """session/manager 模块测试：get_or_create 隔离、save 落盘、list_threads。"""
 
-from src.message import HumanMessage
+from src.schema.message import HumanMessage
 from src.session.checkpointer import InMemoryCheckpointer
 from src.session.manager import SessionManager
 

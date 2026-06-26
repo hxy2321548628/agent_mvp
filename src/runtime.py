@@ -8,9 +8,9 @@ from collections.abc import Callable
 
 from src.config import Settings
 from src.llm.base import LLMClient, Usage
-from src.message import AIMessage, ToolMessage
 from src.middleware.base import Middleware, ModelHandler, ToolHandler
-from src.state import Event, RunContext
+from src.schema.message import AIMessage, ToolMessage
+from src.schema.state import Event, RunContext
 from src.tool.base import ToolInfraError
 from src.tool.registry import ToolRegistry
 

@@ -2,9 +2,9 @@
 
 from pathlib import Path
 
-from src.message import AIMessage, HumanMessage, ToolCall, ToolMessage
 from src.middleware.log import LogMiddleware
-from src.state import AgentState, RunContext
+from src.schema.message import AIMessage, HumanMessage, ToolCall, ToolMessage
+from src.schema.state import AgentState, RunContext
 
 
 def _state(created_at: str = "20260625-100000", first: str = "查北京天气") -> AgentState:

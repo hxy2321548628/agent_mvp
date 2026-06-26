@@ -1,7 +1,7 @@
 """state 模块测试：AgentState 历史追加、RunContext 默认值、Event 四通道。"""
 
-from src.message import AIMessage, HumanMessage, ToolCall
-from src.state import AgentState, Event, RunContext
+from src.schema.message import AIMessage, HumanMessage, ToolCall
+from src.schema.state import AgentState, Event, RunContext
 
 
 def test_agent_state_starts_with_empty_history() -> None:

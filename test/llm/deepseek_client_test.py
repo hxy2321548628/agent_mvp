@@ -14,7 +14,7 @@ import pytest
 from src.config import REASONING_EFFORT, Settings
 from src.llm.base import EmptyLLMResponseError, LLMInfraError, Usage
 from src.llm.deepseek_client import DeepSeekClient, _to_sdk_message
-from src.message import AIMessage, HumanMessage, SystemMessage, ToolCall, ToolMessage
+from src.schema.message import AIMessage, HumanMessage, SystemMessage, ToolCall, ToolMessage
 
 
 # —— SDK 响应对象打桩工具（只暴露客户端会读取的属性）——

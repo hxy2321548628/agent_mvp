@@ -21,7 +21,7 @@
 
 ## R5 系统提示词装配
 - 通过中间件在「进入 session」的钩子里**按顺序拼接系统提示词**（静态段 + 动态环境段）。
-- 提示词已写于 `src/middleware/system_prompt.py`。
+- 提示词已写于 `src/util/system_prompt.py`。
 
 ## R6 中间件职责梳理
 - 将 **SystemPrompt 与 Memory 合并**为一个「会话前缀注入」中间件；**Context（压缩）保持独立**。

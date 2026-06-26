@@ -68,6 +68,24 @@ flowchart TD
 | 先写的测试 | 录制 cassette → 回放产出确定性轨迹；断言器：tool-序列匹配/含某工具/轮数上限各自命中与失败；指标计算正确；基线 diff 能标出回归；`@slow` live 冒烟跑通真实一例 |
 | 完成标准 | `make eval` 离线确定性全绿；CI 挂 `make eval`，回归不过即红；≥1 例 `@slow` 真实冒烟可跑 |
 
+### P16.5 — 评测回归重构：场景化数据集 · 单一中间件事实源 · 场景报告 · 并行评测｜R11 精化
+
+| 项 | 内容 |
+|---|---|
+| 目标 | 精化 P16 的 4 处毛刺：数据粒度（一文件一用例→爆炸、缺场景层）、中间件漂移（cli 与 eval 各写一份栈）、报告粒度（只到用例缺场景）、在线串行（用例多则墙钟线性膨胀） |
+| 任务 | ①**场景化数据集**：`case`/`cassette` 改 `<场景>.jsonl`（一文件一场景、一行一 case），按 `(场景,name)` 键配对而非行号，删冗余 `Case.cassette` 字段，trace 落 `eval/run/<场景>/<case>/`；②**单一中间件事实源**：抽 `src/util/stack.py::build_middlewares`，cli 与 eval 同源调用，差异收敛为显式开关（confirm/log/trace_sink/context）；③**场景级报告**：`CaseResult` 加 `scenario`，`Report` 逐场景 `metrics`/`render` + 全局 rollup（门禁仍全局）；④**并行评测**：`run_suite` 走 `ThreadPoolExecutor`（用例已隔离、I/O 密集），`eval/config.py` 加 `EVAL_PARALLEL`，与 P18 async 核心正交（见 [DDD3 §34](../ddd/03ddd.md)）|
+| 先写的测试 | 场景 jsonl 解析 + scenario 注入；cassette 按 name 键查表；`build_middlewares` cli 全开/eval 关 I/O 的栈顺序；逐场景指标分组互不混淆；`run_suite` parallel>1 结果保序、name 配对正确、成功率 100% |
+| 完成标准 | `make eval` 场景化全绿、报告按场景出指标；cli 与 eval 中间件单一来源不漂；在线评测可并发（`EVAL_PARALLEL` 可配） |
+
+### P16.6 — 在线录制：从真实 CLI 会话录制 cassette + case 桩｜R11 延伸
+
+| 项 | 内容 |
+|---|---|
+| 目标 | 补上回放盒的「写」侧对偶：在真实 CLI 会话里一键录制，把模型逐轮响应落成可回放的 cassette，并脚手架 case 桩——告别手写多轮回放盒的烦琐易错 |
+| 任务 | 新增 `src/middleware/record.py`：`RecordControl`（`active`/`scenario` 可变句柄）+ `RecordMiddleware`（`after_model` 采集完整 `AIMessage`+`usage`，`on_session_end` 落 cassette 一行 + case 桩一行，名 `<场景>-NN` 自增）；`build_middlewares` 加 `record_control`/`cassette_dir`/`case_dir`（给了才挂、紧随 Observe），eval 不挂；cli 加 `:cassette <场景>` 命令（默认关，REPL 改句柄、中间件读句柄，跨层零 import，仿 `make_trace_sink`），落盘复用 `EVAL_CASSETTE_DIR`/`EVAL_CASE_DIR`（见 [DDD3 §35](../ddd/03ddd.md)）|
+| 先写的测试 | active=False 不落盘；active 录全 turns（含 tool_calls 参数 + usage）+ case 桩（input + 观测 tool_sequence）；同场景多 run 用例名自增；`build_middlewares` 给 record_control 才挂 RecordMiddleware；端到端：录出的 cassette 可被 `run_case` 回放通过（写↔读对偶闭环）|
+| 完成标准 | CLI `:cassette <场景>` 录一段会话即在 `eval/` 生成可回放 cassette + 待补断言 case 桩；`make eval` 对录得用例（补断言后）可跑 |
+
 ### P17 — 持久化：JSONL 落盘 Checkpointer + Message 判别联合序列化｜R12
 
 | 项 | 内容 |

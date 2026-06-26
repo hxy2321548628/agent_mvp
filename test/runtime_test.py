@@ -4,11 +4,11 @@ from collections.abc import Callable
 
 from src.config import Settings
 from src.llm.base import Usage
-from src.message import AIMessage, HumanMessage, Message, ToolCall
 from src.middleware.base import Middleware
 from src.middleware.max_turn import MaxTurnMiddleware
 from src.runtime import FALLBACK_TEXT, AgentRuntime
-from src.state import AgentState, Event, RunContext
+from src.schema.message import AIMessage, HumanMessage, Message, ToolCall
+from src.schema.state import AgentState, Event, RunContext
 from src.tool.base import ToolInfraError
 from src.tool.calculator import CalculatorArgs, CalculatorTool
 from src.tool.registry import ToolRegistry

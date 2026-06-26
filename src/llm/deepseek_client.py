@@ -13,7 +13,7 @@ import httpx
 from openai import APIConnectionError, InternalServerError, OpenAI, RateLimitError
 
 from src.llm.base import EmptyLLMResponseError, LLMInfraError, Usage
-from src.message import AIMessage, Message, ToolCall, ToolMessage
+from src.schema.message import AIMessage, Message, ToolCall, ToolMessage
 
 
 # 视为可重试的连接期 SDK 异常（网络/超时/限流/5xx）；翻译成项目级 LLMInfraError

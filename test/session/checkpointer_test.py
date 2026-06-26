@@ -1,7 +1,7 @@
 """session/checkpointer 模块测试：InMemoryCheckpointer 存取与线程列举。"""
 
+from src.schema.state import AgentState
 from src.session.checkpointer import InMemoryCheckpointer
-from src.state import AgentState
 
 
 def test_get_missing_returns_none() -> None:

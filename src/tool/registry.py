@@ -3,7 +3,7 @@
 新增工具 = 实现 Tool 协议 + register()，不动 runtime、不动中间件。
 """
 
-from src.message import ToolMessage
+from src.schema.message import ToolMessage
 from src.tool.base import Tool, ToolInfraError
 
 

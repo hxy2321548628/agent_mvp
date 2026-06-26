@@ -1,7 +1,7 @@
 """最大轮次中间件 max_turn.py：步数达上限即请求终止本次 loop。"""
 
 from src.middleware.base import Middleware
-from src.state import RunContext
+from src.schema.state import RunContext
 
 
 STOP_REASON = "max_turn"  # 超限时写入 ctx.stop_reason 的标记

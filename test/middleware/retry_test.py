@@ -5,9 +5,9 @@ from collections.abc import Callable
 import pytest
 
 from src.llm.base import EmptyLLMResponseError, LLMInfraError
-from src.message import AIMessage, ToolMessage
 from src.middleware.retry import RetryMiddleware
-from src.state import AgentState, RunContext
+from src.schema.message import AIMessage, ToolMessage
+from src.schema.state import AgentState, RunContext
 from src.tool.base import ToolInfraError
 
 

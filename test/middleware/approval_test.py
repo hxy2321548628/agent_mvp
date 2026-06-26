@@ -2,9 +2,9 @@
 
 from collections.abc import Callable
 
-from src.message import ToolCall, ToolMessage
 from src.middleware.approval import DENIED_MESSAGE, ApprovalMiddleware
-from src.state import AgentState, RunContext
+from src.schema.message import ToolCall, ToolMessage
+from src.schema.state import AgentState, RunContext
 
 
 DANGER = [r"\brm\b", r">"]

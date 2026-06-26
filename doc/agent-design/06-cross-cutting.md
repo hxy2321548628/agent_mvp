@@ -6,7 +6,7 @@
 
 [prefix.py](../../src/middleware/prefix.py)，钩子 `on_session_start`。它把三段东西拼成「钉住前缀」插到历史最前：
 
-1. **静态系统提示**（01–07 段，见 [system_prompt.py](../../src/middleware/system_prompt.py)）：角色、任务、动作规范、工具说明、风格、输出格式。
+1. **静态系统提示**（01–07 段，见 [system_prompt.py](../../src/util/system_prompt.py)）：角色、任务、动作规范、工具说明、风格、输出格式。
 2. **动态环境**（08 段）：工作目录、是否 git、平台、shell、模型名、日期——由 `build_runtime_env`（[prefix.py:38](../../src/middleware/prefix.py#L38)）在组合根采集后注入（便于离线测试时塞假环境）。
 3. **未完成 todo 提醒**（可选）：复用 `TodoStore`，把没做完的待办拼成一句提醒。
 
@@ -55,7 +55,7 @@ def wrap_tool_call(self, ctx, handler):
 | 用途 | 调试 | 审计 |
 | 文件 | [trace.py](../../src/middleware/trace.py) | [log.py](../../src/middleware/log.py) |
 
-两者都订 `after_model`/`before_tool`/`after_tool`，事件正文由 [event.py](../../src/middleware/event.py) 统一格式化（`format_model_event` / `format_tool_call_event` / `format_tool_result_event`）——**避免两份重复的格式化代码**。各自只负责加前缀（trace 加 `[trace thread=… step=…]`）和决定落点。
+两者都订 `after_model`/`before_tool`/`after_tool`，事件正文由 [event.py](../../src/util/event.py) 统一格式化（`format_model_event` / `format_tool_call_event` / `format_tool_result_event`）——**避免两份重复的格式化代码**。各自只负责加前缀（trace 加 `[trace thread=… step=…]`）和决定落点。
 
 > Trace 的 sink 是注入的：组合根传入一个「仅当 `trace_on` 打开才打印」的闭包（`make_trace_sink`），于是 `:trace` 命令翻转 `Toggles.trace_on` 就能即时生效——开关状态由 REPL 与 sink **共享**一个 `Toggles` 对象。
 
@@ -86,7 +86,7 @@ graph LR
     end
 ```
 
-- **`Event(kind, text)`**（[state.py](../../src/state.py)）：`kind ∈ {user, tool_result, reasoning, answer}`。`RunContext` 增 `on_event` 单 sink + `reasoning` 开关。
+- **`Event(kind, text)`**（[state.py](../../src/schema/state.py)）：`kind ∈ {user, tool_result, reasoning, answer}`。`RunContext` 增 `on_event` 单 sink + `reasoning` 开关。
 - **runtime 桥接**：`_stream_sinks`（[runtime.py:81](../../src/runtime.py#L81)）在 `on_event` 存在时，把底层的答案流/思考流桥接成 `answer`/`reasoning` 事件；`_run_tools` 在工具返回处喂 `tool_result` 事件。
 - **render.py 纯展示**（[cli/render.py](../../cli/render.py)）：每通道一种 rich 样式（用户=青、工具=暗黄、思考=暗斜、回复=绿），`answer`/`reasoning` 逐 token 连续流式、切通道时自动换行收尾。
 

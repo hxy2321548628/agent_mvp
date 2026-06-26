@@ -1,7 +1,7 @@
 """middleware/max_turn 模块测试：步数达上限设 stop_reason，未达上限不干预。"""
 
 from src.middleware.max_turn import STOP_REASON, MaxTurnMiddleware
-from src.state import AgentState, RunContext
+from src.schema.state import AgentState, RunContext
 
 
 def _context_at_step(step: int) -> RunContext:

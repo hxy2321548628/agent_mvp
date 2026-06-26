@@ -1,6 +1,6 @@
 """message 模块测试：各消息类型可构造、字段语义正确。"""
 
-from src.message import (
+from src.schema.message import (
     AIMessage,
     HumanMessage,
     Message,

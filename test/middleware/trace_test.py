@@ -2,9 +2,9 @@
 
 import pytest
 
-from src.message import AIMessage, ToolCall, ToolMessage
 from src.middleware.trace import TraceMiddleware
-from src.state import AgentState, RunContext
+from src.schema.message import AIMessage, ToolCall, ToolMessage
+from src.schema.state import AgentState, RunContext
 
 
 def _ctx(step: int = 0) -> RunContext:

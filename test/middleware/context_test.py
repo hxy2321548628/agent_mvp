@@ -2,9 +2,9 @@
 
 from collections.abc import Callable
 
-from src.message import AIMessage, HumanMessage, Message, SystemMessage, ToolCall, ToolMessage
 from src.middleware.context import ContextMiddleware
-from src.state import AgentState, RunContext
+from src.schema.message import AIMessage, HumanMessage, Message, SystemMessage, ToolCall, ToolMessage
+from src.schema.state import AgentState, RunContext
 
 
 class _StubLLM:

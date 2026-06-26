@@ -7,8 +7,8 @@ import pytest
 from src.agent import Agent
 from src.config import Settings
 from src.llm.base import LLMClient, Usage
-from src.message import AIMessage, Message, ToolCall
 from src.runtime import AgentRuntime
+from src.schema.message import AIMessage, Message, ToolCall
 from src.session.checkpointer import InMemoryCheckpointer
 from src.session.manager import SessionManager
 from src.tool.base import Tool

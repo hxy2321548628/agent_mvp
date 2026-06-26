@@ -3,8 +3,8 @@
 多窗口独立 = 多个 thread_id → 多份独立 State；持久化集中于此（get/put 都经它）。
 """
 
+from src.schema.state import AgentState
 from src.session.checkpointer import Checkpointer
-from src.state import AgentState
 
 
 class SessionManager:

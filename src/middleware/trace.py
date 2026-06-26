@@ -6,8 +6,8 @@
 from collections.abc import Callable
 
 from src.middleware.base import Middleware
-from src.middleware.event import format_model_event, format_tool_call_event, format_tool_result_event
-from src.state import RunContext
+from src.schema.state import RunContext
+from src.util.event import format_model_event, format_tool_call_event, format_tool_result_event
 
 
 def _default_sink(line: str) -> None:

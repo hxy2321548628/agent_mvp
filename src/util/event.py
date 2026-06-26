@@ -3,8 +3,8 @@
 返回「事件正文」，不含线程/步数等前缀；各中间件自行加前缀并决定落点（stdout / 文件）。
 """
 
-from src.message import AIMessage
-from src.state import RunContext
+from src.schema.message import AIMessage
+from src.schema.state import RunContext
 
 
 def format_model_event(ctx: RunContext) -> str:

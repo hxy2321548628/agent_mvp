@@ -5,7 +5,7 @@ import io
 from rich.console import Console
 
 from cli.render import LABEL, STYLE, Renderer
-from src.state import Event
+from src.schema.state import Event
 
 
 def _renderer() -> tuple[Renderer, io.StringIO]:

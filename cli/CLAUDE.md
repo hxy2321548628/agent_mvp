@@ -23,6 +23,7 @@ Design: see @doc/ddd/01ddd.md §12.
 | `:list` | list existing windows |
 | `:trace` | toggle tool / execution trace logging |
 | `:stream` | toggle streaming output |
+| `:cassette <scenario>` | start recording the session as eval cassette + case stub (run again to stop; default off) |
 
 Plain text (no leading `:`) is sent to the active session's `Agent.run`.
 

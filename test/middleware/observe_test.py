@@ -10,10 +10,10 @@ import pytest
 
 from src.config import Settings
 from src.llm.base import Usage
-from src.message import AIMessage, HumanMessage, Message, ToolCall
 from src.middleware.observe import ObserveMiddleware, read_trace
 from src.runtime import AgentRuntime
-from src.state import AgentState, RunContext, RunTrace, TurnRecord
+from src.schema.message import AIMessage, HumanMessage, Message, ToolCall
+from src.schema.state import AgentState, RunContext, RunTrace, TurnRecord
 from src.tool.calculator import CalculatorTool
 from src.tool.registry import ToolRegistry
 

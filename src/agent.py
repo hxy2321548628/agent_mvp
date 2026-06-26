@@ -5,10 +5,10 @@
 
 from collections.abc import Callable
 
-from src.message import HumanMessage
 from src.runtime import AgentRuntime
+from src.schema.message import HumanMessage
+from src.schema.state import Event, RunContext
 from src.session.manager import SessionManager
-from src.state import Event, RunContext
 from src.tool.registry import ToolRegistry
 
 

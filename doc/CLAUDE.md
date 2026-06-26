@@ -7,7 +7,7 @@ This directory holds the project's documents. The PRD / DDD / plan documents for
 | Document | Responsibility | Question it answers |
 |---|---|---|
 | [prd/](prd/) | Product requirements per phase: [01prd](prd/01prd.md) interview prompt · [02prd](prd/02prd.md) R1–R9 · [03prd](prd/03prd.md) R10–R18 | What to build, acceptance criteria |
-| [ddd/](ddd/) | Detailed design per phase (continuous §): [01ddd](ddd/01ddd.md) §1–§15 · [02ddd](ddd/02ddd.md) §16–§23 · [03ddd](ddd/03ddd.md) §24–§33 | How to build it |
+| [ddd/](ddd/) | Detailed design per phase (continuous §): [01ddd](ddd/01ddd.md) §1–§15 · [02ddd](ddd/02ddd.md) §16–§23 · [03ddd](ddd/03ddd.md) §24–§35 | How to build it |
 | [plan/01plan.md](plan/01plan.md) | Phase-1 development plan (phased TDD, per-phase definition of done, requirement mapping) | In what steps, when it's done |
 | [plan/02plan.md](plan/02plan.md) | Phase-2 development plan (the 9 new features added 2026-06-25) | In what steps, when it's done |
 | [plan/03plan.md](plan/03plan.md) | Phase-3 development plan (eval regression, full-async, persistence & layered memory, perf tiering; added 2026-06-26) | In what steps, when it's done |

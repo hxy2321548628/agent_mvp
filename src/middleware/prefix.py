@@ -12,9 +12,11 @@ from pathlib import Path
 import platform
 
 from src.config import Settings
-from src.message import Message, SystemMessage
 from src.middleware.base import Middleware
-from src.middleware.system_prompt import (
+from src.schema.message import Message, SystemMessage
+from src.schema.state import RunContext
+from src.tool.todo import TodoStore
+from src.util.system_prompt import (
     ACTION_PROMPT04,
     ENV_PROMPT08,
     INTRO_PROMPT01,
@@ -24,8 +26,6 @@ from src.middleware.system_prompt import (
     TASK_PROMPT03,
     TOOL_PROMPT05,
 )
-from src.state import RunContext
-from src.tool.todo import TodoStore
 
 
 # —— 顶层参数 ——

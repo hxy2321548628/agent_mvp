@@ -258,3 +258,158 @@ flowchart TD
 - `session/`：新增 `FileCheckpointer`（JSONL + 路径转义 + 每 thread `asyncio.Lock`）。
 - 新增包：`memory/`（项目级分层记忆）、`eval/`（评测）、`middleware/observe.py`。
 - `config.py` 增量：`TRACE_DIR`、`MODEL_PRICE`、`EVAL_DIR`/`EVAL_CASE_DIR`/`EVAL_BASELINE`、`SESSION_DIR`、`PARALLEL_TOOL`/`PARALLEL_TOOL_MAX`、`TOKEN_BUDGET`/`COMPRESS_KEEP_TOKEN`、`MODEL_TIER`/`ROUTE_RULE`、`MEMORY_DIR`/`RECALL_TOP_K`/`EMBED_MODEL`。
+
+## 34. 评测回归重构（R11 精化，对应 P16.5）——场景化数据集 · 单一中间件事实源 · 场景报告 · 并行评测
+
+**为什么再动 §26**：P16（§26）已落地可用，但试用后暴露 4 处毛刺，本节是对 §26 的**精化**（非推翻；§26 记录「P16 初版形态」，本节记录其演进）：
+
+1. **数据粒度**：一文件一用例 → 用例一多文件就爆炸，且缺「场景」这一层（无法按场景看表现）。
+2. **中间件漂移**：`cli` 的 `build_agent` 与 `eval` 的 `_eval_middlewares` **各写一份栈**——已真实发生过漂移（eval 漏挂 SessionPrefix，系统提示缺失）。
+3. **报告粒度**：指标只汇总到「全体用例」，缺「逐场景」汇总。
+4. **在线串行**：`run_online` 顺序跑用例，真实 API 延迟下用例一多墙钟线性膨胀。
+
+```mermaid
+flowchart LR
+    subgraph 数据[34.1 场景化数据集]
+      casej["case/&lt;场景&gt;.jsonl<br/>一行一 case"]
+      casj["cassette/&lt;场景&gt;.jsonl<br/>一行一录制(name 键)"]
+    end
+    subgraph 装配[34.2 单一中间件事实源]
+      build["src build_middlewares()<br/>行为核心固定 + 显式覆盖"]
+    end
+    casej --> runner
+    casj --> runner[runner 并行跑]
+    build --> runner
+    runner --> result["CaseResult(+scenario)"]
+    result --> report["34.3 场景级报告<br/>逐场景 metrics + 全局 rollup"]
+```
+
+### 34.1 场景化数据集：jsonl（一文件一场景，一行一 case）
+
+- **case**：`eval/case/<场景>.jsonl`，每行一条 `Case`；文件名 stem = **场景名**。
+- **cassette**：`eval/cassette/<场景>.jsonl`，每行 `{"name": <case 名>, "turns": [...]}`。
+- **配对**：按 `(场景, name)` **键**查表，**不按行号**——录制重排/增删免疫（行号配对一动就错位）。加载时把场景 cassette 读成 `{name: (responses, usages)}`。
+- **`Case.cassette` 字段删除**：场景文件名 + `case.name` 已唯一定位录制，字段冗余。
+- **trace 落盘**：`eval/run/<场景>/<case-name>/<run_id>.jsonl`（按场景再分层）。
+
+> 取舍：jsonl 是评测数据集的标准形态（append 友好、一眼看全场景）；**name 键配对**而非行号是关键的健壮性选择。
+
+### 34.2 单一中间件事实源：`build_middlewares` 共享工厂
+
+**问题**：§26 让 eval **另写一份**中间件栈来「镜像」生产，镜像靠手维护必然漂移。**但「完全一致」既不可行也不该**——Log/Trace 是纯 I/O、Approval 在 eval 必须自动放行、registry 在 eval 只能是确定性工具（无 bash/fetch 副作用与网络）。
+
+**原则**：不是「同一个栈」，而是「**单一事实源 + 显式覆盖项**」。在 `src` 抽一个默认装配工厂，`cli` 与 `eval` 都调它，差异收敛成几个**有名字的参数**：
+
+```python
+# src/util/stack.py（新增）
+def build_middlewares(*, llm, registry, todo_store, settings,
+                      confirm,            # Approval 确认函数：cli 交互 / eval 恒放行
+                      trace_sink=None,    # None=不挂 TraceMiddleware（eval）
+                      log=False,          # 是否挂 LogMiddleware（eval 关）
+                      context=True):      # 是否挂 ContextMiddleware（eval 单轮可关）
+    ...  # 行为核心恒在、且同序：SessionPrefix → Observe →[Log]→[Trace]→ MaxTurn →[Context]→ Approval → Retry
+```
+
+```mermaid
+flowchart TD
+    factory["src build_middlewares()<br/>行为核心固定同序"]
+    factory -->|"confirm=交互, log/trace/context 全开, 全工具"| cli[cli build_agent]
+    factory -->|"confirm=恒放行, log/trace 关, 确定性工具"| eval[eval evaluate]
+```
+
+> 取舍：**新增行为中间件只落工厂一处，eval 自动跟上**；cli↔eval 的差异从「两份手维护列表」变成「几个显式开关」，漂移不再是隐性的。放 `src`（被 cli/eval 共同消费的默认装配 profile），符合 [cli/CLAUDE.md](../../cli/CLAUDE.md) 的「业务逻辑留 src、cli 只注入」。
+
+### 34.3 场景级指标报告
+
+- `CaseResult` 加 `scenario: str` 字段。
+- `Report` 按 `scenario` 分组 → 每组算一份 `metrics()` + 一个全局 rollup；`render` 出「逐场景表 + 全局汇总」。
+- **回归门禁先保持全局**（`GATED_METRICS` 仍比全局基线）。**按场景门禁**（如单独守 `calculator` 场景成功率）列为后续 nice-to-have，本期不做。
+
+> 取舍：#1 落地后此项几乎免费（场景即 jsonl 文件 stem）；先给「逐场景可见性」，不急着上「逐场景闸门」。
+
+### 34.4 并行评测：有界线程池（**不需** P18 的 async 核心）
+
+**关键认知**：eval 并行**不需要把 agent 核心改 async**。用例彼此独立、且是**网络 I/O 密集**（openai/httpx 调用时释放 GIL）；§26 的 `evaluate` **每条 case 已新建**独立 `registry`/`AgentState`/`RunContext`/中间件实例——无跨 case 共享可变态。故直接上 `ThreadPoolExecutor(max_workers=EVAL_PARALLEL)` 跑各 case，即可拿到接近 N× 墙钟提速。
+
+```mermaid
+flowchart TD
+    suite["run_suite (cases)"] --> pool["ThreadPoolExecutor<br/>max_workers=EVAL_PARALLEL"]
+    pool --> c1["case A: 独立 state+mw"]
+    pool --> c2["case B: 独立 state+mw"]
+    pool --> c3["case …: 独立 state+mw"]
+    c1 & c2 & c3 --> report
+```
+
+- **与 P18（§27）正交**：§27 是把 runtime/middleware/llm/tool **全链路改 `async def`** 的侵入式重写；线程池**不碰**核心的 sync/async 形态，只在 eval 外层并发跑独立的同步循环。两者互不依赖、互不阻塞。
+- **限流**：`EVAL_PARALLEL` 可配（尊重 DeepSeek 速率限制），默认取保守值（如 4）。
+- **作用面**：主要收益在 `make eval-online`（真实 API 延迟）；`make eval`（回放）本就秒级，并行可选。
+
+> 取舍：以**零核心改动、零风险**拿走在线评测的墙钟瓶颈（隔离态已就绪，线程池是顺水推舟）；真正的「核心 async/await」仍留 §27/P18，本节不预支。
+
+### 34.5 配置/类型增量小结（本节）
+
+- `config.py`：新增 `EVAL_PARALLEL`（在线/回放并发度）。
+- `eval/case.py`：删 `Case.cassette` 字段；`load_*` 改读 `<场景>.jsonl`（场景名 = 文件 stem）。
+- `eval/replay.py`：`load_cassette` → 读场景 jsonl 成 `{name: (responses, usages)}`，按 `name` 取。
+- `eval/report.py`：`CaseResult` 加 `scenario`；`Report` 加逐场景 `metrics`/`render`。
+- `eval/runner.py`：`run_suite` 走线程池；`_eval_middlewares` 删除，改调 `src` 的 `build_middlewares`。
+- `src/util/stack.py`（**新增**）：`build_middlewares()`；`cli/main.py` 与 `eval` 同源调用。
+- **迁移**：现有 `eval/case/*.json`、`eval/cassette/*.json` 合并为 `eval/case/calculator.jsonl` 等；`Case(... cassette=...)` 的存量测试随字段删除一并更新。
+
+> 与 §26 的关系：本节落地后，§26.1「`case/*.json` 单文件」与「`_eval_middlewares` 镜像栈」的表述被本节取代，届时回填 §26 指向本节，保持单一事实源不漂。
+
+## 35. 在线录制：从真实 CLI 会话录制 cassette + case 桩（R11 延伸，对应 P16.6）
+
+**为什么要做**：§26/§34 建好了回放盒的「**读**」侧（`ReplayLLMClient`），但回放盒至今全靠**手写**——多轮 cassette 要逐字填准 `tool_calls` 参数与 `usage`，既烦又易错，是成长评测集的瓶颈。本节补上「**写**」侧对偶：在真实 CLI 会话里**一键录制**，把模型逐轮响应落成 cassette，并脚手架一条 case 桩。
+
+**为什么 trace 替代不了**：§25 的 `TurnRecord` 是机读**指标**（只存 `tool_calls` 名、时延、token），**不含** assistant 的 `content`/`reasoning_content`、**不含** tool 调用**参数**——而回放恰恰需要这些。故录制不是复用 trace，而是另起一个「保真到可回放」的采集。
+
+### 35.1 RecordMiddleware：ObserveMiddleware 的同形兄弟
+
+录制是 `ReplayLLMClient`（读）的写侧对偶，落点选**中间件**而非包一层 LLMClient——因为它与 §25 的 Observe 同形，且有 `ctx` 可顺手抓用户输入做 case 桩：
+
+```mermaid
+flowchart LR
+    subgraph 写[RecordMiddleware 录制]
+      am["after_model<br/>抓 ctx.state.messages[-1]<br/>(content+tool_calls 带参数+reasoning)<br/>+ ctx.last_usage"] --> buf[逐轮 turn 缓冲]
+      buf --> end1["on_session_end<br/>落 cassette 一行 {name,turns}<br/>+ case 桩一行 {name,input,expect}"]
+    end
+    end1 -->|对偶| 读["ReplayLLMClient<br/>读 turns 回放"]
+```
+
+- **采集点**：`after_model` 时 `ctx.state.messages[-1]` 即完整 `AIMessage`，`ctx.last_usage` 即本轮 `Usage`；逐轮拼 `{content, reasoning_content, tool_calls:[{name,arguments}], usage}`——与 §34.1 的 `_parse_turns` **完美往返**。
+- **粒度**：一次 `run()`（一条用户输入 → 一个 ReAct 循环）= **一条 case = 一行 cassette**，正好被中间件的 `on_session_start`/`on_session_end` 括住（与 Observe 每 run 一份 trace 同粒度）。一段 N 轮对话 = N 条 case。
+- **产出两份**：cassette 行（写 `eval/cassette/<场景>.jsonl`，**完整**）+ case 桩行（写 `eval/case/<场景>.jsonl`：`input` 自动取本轮 `HumanMessage`、`expect.tool_sequence` 预填**实际观测序列**）。
+
+### 35.2 `:cassette` 开关：默认关，与 `:trace`/`:stream` 同源
+
+录制默认**关**，经 REPL 命令显式开启，与现有 toggle 一致：
+
+- `:cassette <场景名>`：开始录制到该场景（后续每条用户输入追加一条 case）。
+- `:cassette`（录制中，无参）：结束录制。
+
+```mermaid
+flowchart TD
+    cmd[":cassette &lt;场景&gt;"] --> ctrl["RecordControl<br/>active=True, scenario, seq"]
+    ctrl --> mw["RecordMiddleware 每 run 读 control<br/>active 才采集与落盘"]
+    cmd2[":cassette"] --> off["active=False 结束"]
+```
+
+- **跨层不耦合**：`src` 不能 import `cli`。仿 `TraceMiddleware(sink=make_trace_sink(toggles))` 的做法，在 `src` 定义一个 `RecordControl`（`active`/`scenario`/`seq` 的可变句柄），REPL 的 `:cassette` 命令**改它**，`RecordMiddleware` 每 run **读它**——共享状态、零跨层 import。
+- **装配**：`build_middlewares` 加 `record_control: RecordControl | None = None`，给了才挂 `RecordMiddleware`（紧随 Observe）；cli 传一个、eval 传 `None`（评测不录制）。
+
+### 35.3 边界与取舍
+
+- **「发生了什么」可录，「应该发生什么」要人写**：录制只能预填 `expect.tool_sequence`=实际观测；`answer_contains`/`must_not_call` 等**断言是判断**，需你改定。故产出是「完整 cassette + 待补断言的 case 桩」。
+- **录制即真实执行**：录制真实会话会**真的执行工具**（bash/write/edit 有副作用）。回放时工具在 eval 的确定性 registry 下**重新执行**——故宜录制「打算进评测集」的确定性工具场景；用了 fetch/bash 的会话，回放期工具结果可能与录制时不同（仅模型响应被回放）。
+- **单输入粒度**：eval 的 case 是「单条输入」模型；多轮对话被拆成多条独立 case（每条不带前序记忆）。若要「带上下文记忆的单个 case」是另一种形态，本节不覆盖（列为后续）。
+- **流式无影响**：采集在 `after_model`（完整 `AIMessage` 已拼好）发生，`:stream` 开关不影响录制保真。
+
+> 取舍：以一个**与 Observe 同形的薄中间件 + 一个默认关的 toggle**，把"手写多轮回放盒"变成"真实会话一键录制"——成长评测集的成本从「逐字填 JSON」降到「跑一遍 + 补断言」。不引入新抽象（复用 §34.1 cassette 格式与 §25 中间件生命周期），落点最小。
+
+### 35.4 配置/类型增量小结（本节）
+
+- `src/middleware/record.py`（**新增**）：`RecordControl`（`active`/`scenario`/`seq` 可变句柄）+ `RecordMiddleware`（采集→落 cassette + case 桩）。
+- `src/util/stack.py`：`build_middlewares` 加 `record_control` 入参（None=不挂）。
+- `cli`：`Toggles` 挂录制句柄、`command.py`/`repl.py` 加 `:cassette` 命令；复用 `EVAL_CASSETTE_DIR`/`EVAL_CASE_DIR`。
+- 与 §34.1 cassette 格式、§25 中间件生命周期完全复用，无新数据格式。

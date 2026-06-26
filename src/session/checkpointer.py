@@ -5,7 +5,7 @@
 
 from typing import Protocol
 
-from src.state import AgentState
+from src.schema.state import AgentState
 
 
 class Checkpointer(Protocol):

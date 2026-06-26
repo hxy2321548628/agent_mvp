@@ -66,7 +66,7 @@ for tool in tools:
 ```python
 from collections.abc import Callable
 from src.middleware.base import Middleware
-from src.middleware.event import format_tool_call_event   # 复用现成格式化
+from src.util.event import format_tool_call_event   # 复用现成格式化
 from src.state import RunContext
 
 class AuditMiddleware(Middleware):

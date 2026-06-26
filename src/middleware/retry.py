@@ -12,9 +12,9 @@ import time
 from typing import TypeVar
 
 from src.llm.base import LLMInfraError
-from src.message import AIMessage, ToolMessage
 from src.middleware.base import Middleware, ModelHandler, ToolHandler
-from src.state import RunContext
+from src.schema.message import AIMessage, ToolMessage
+from src.schema.state import RunContext
 from src.tool.base import ToolInfraError
 
 
