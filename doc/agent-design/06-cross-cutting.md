@@ -61,6 +61,8 @@ def wrap_tool_call(self, ctx, handler):
 
 Log 的文件名 = `created_at` + 清洗截断的首句用户提问，按 `thread_id` 缓存以保持稳定（[log.py `_filename`](../../src/middleware/log.py#L59)）。
 
+> 三期又加了**第三种**可观测：机读的 `Observe`——把每次 run 落成**结构化 JSONL**（token / 成本 / cache 命中），专供评测打分与成本分析。Trace/Log 给人看、Observe 给机器看，分工与用途见 [10 §10.2](10-evaluation.md)。
+
 ## 6.5 Retry：infra 错误的退避重试
 
 [retry.py](../../src/middleware/retry.py)，环绕钩子 `wrap_model_call` + `wrap_tool_call`。对 `LLMInfraError` / `ToolInfraError` 做指数退避重试（第 n 次等 `backoff·2^(n-1)`）。工具重试耗尽则抛出，交 runtime 兜底成 `is_error` 回灌（[03 §3.5](03-runtime-and-middleware.md)）。
