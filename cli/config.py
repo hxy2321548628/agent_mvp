@@ -18,6 +18,7 @@ HELP = (
     "  :trace         开关执行/工具日志\n"
     "  :stream        开关流式输出\n"
     "  :think         开关推理（思考）模式\n"
+    "  :cassette <场景> 开始录制评测用例（再 :cassette 结束）\n"
     "  :help          显示本帮助\n"
     "  :quit / :exit  退出"
 )

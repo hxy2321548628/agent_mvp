@@ -12,9 +12,10 @@ from cli.command import parse_command
 from cli.config import APPROVE_PROMPT, DEFAULT_THREAD, GOODBYE, HELP, PROMPT, WELCOME
 from cli.render import Renderer
 from src.agent import Agent
-from src.message import ToolCall
+from src.middleware.record import RecordControl
+from src.schema.message import ToolCall
+from src.schema.state import Event
 from src.session.manager import SessionManager
-from src.state import Event
 
 
 @dataclass
@@ -66,12 +67,14 @@ class Repl:
         out: Callable[[str], None] = print,
         render: Callable[[Event], None] | None = None,
         default_thread: str = DEFAULT_THREAD,
+        record: RecordControl | None = None,
     ) -> None:
         self._agent = agent
         self._session = session
         self._toggles = toggles
         self._out = out
         self._render = render or Renderer().render
+        self._record = record or RecordControl()
         self._thread = default_thread
         self._counter = 1
         self.running = True
@@ -88,6 +91,7 @@ class Repl:
             "trace": self._trace,
             "stream": self._stream,
             "think": self._think,
+            "cassette": self._cassette,
             "help": self._help,
             "quit": self._quit,
             "unknown": self._unknown,
@@ -141,6 +145,18 @@ class Repl:
     def _think(self, arg: str) -> str:
         self._toggles.think_on = not self._toggles.think_on
         return f"think 已{'开启' if self._toggles.think_on else '关闭'}"
+
+    def _cassette(self, arg: str) -> str:
+        if self._record.active:
+            scenario = self._record.scenario
+            self._record.active = False
+            return f"录制已结束：场景 {scenario}（cassette + case 桩已追加到 eval/）"
+        scenario = arg.strip()
+        if not scenario:
+            return "用法：:cassette <场景名> 开始录制；录制中再 :cassette 结束"
+        self._record.active = True
+        self._record.scenario = scenario
+        return f"录制已开始：场景 {scenario}（之后每条对话录成一条用例；:cassette 结束）"
 
     def _help(self, arg: str) -> str:
         return HELP
