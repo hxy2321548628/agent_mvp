@@ -7,3 +7,4 @@ EVAL_CASSETTE_DIR = "eval/cassette"  # 录制回放盒（*.json）目录
 EVAL_TRACE_DIR = "eval/run"  # 回放产生的结构化 trace 落盘目录
 EVAL_BASELINE = "eval/baseline.json"  # 离线回放的指标基线（与本次结果 diff，回归则非零退出）
 EVAL_ONLINE_BASELINE = "eval/baseline-online.json"  # 在线（真实 API）打分的指标基线（缺省=不判回归）
+EVAL_PARALLEL = 4  # 在线评测并发度（ThreadPoolExecutor 工作线程数；用例 I/O 密集，尊重 API 限流取保守值）

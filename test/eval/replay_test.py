@@ -5,18 +5,23 @@ from pathlib import Path
 
 from eval.replay import ReplayLLMClient, load_cassette
 from src.llm.base import Usage
-from src.message import AIMessage, HumanMessage
+from src.schema.message import AIMessage, HumanMessage
 
 
-def test_load_cassette_parses_turns(tmp_path: Path) -> None:
-    """cassette 的每个 turn 拆成 AIMessage（含 tool_calls）与 Usage。"""
-    path = tmp_path / "c.json"
-    turns = [
+def test_load_cassette_pairs_by_name(tmp_path: Path) -> None:
+    """场景 cassette jsonl 按 name 键查表；每条的 turns 拆成 AIMessage（含 tool_calls）与 Usage。"""
+    path = tmp_path / "calculator.jsonl"
+    calc_turns = [
         {"content": "算", "tool_calls": [{"name": "calculator", "arguments": {"expression": "1+1"}}], "usage": {"prompt_tokens": 5}},
         {"content": "2"},
     ]
-    path.write_text(json.dumps({"turns": turns}), encoding="utf-8")
-    responses, usages = load_cassette(path)
+    path.write_text(
+        json.dumps({"name": "calc", "turns": calc_turns}) + "\n" + json.dumps({"name": "greet", "turns": [{"content": "你好"}]}) + "\n",
+        encoding="utf-8",
+    )
+    table = load_cassette(path)
+    assert set(table) == {"calc", "greet"}
+    responses, usages = table["calc"]
     assert len(responses) == 2
     assert responses[0].tool_calls[0].name == "calculator"
     assert responses[0].tool_calls[0].arguments == {"expression": "1+1"}

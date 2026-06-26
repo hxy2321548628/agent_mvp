@@ -5,8 +5,9 @@ from pathlib import Path
 from eval.report import CaseResult, Report, diff_baseline, load_baseline, render
 
 
-def _result(name: str, passed: bool, tool_match: bool | None = None, turns: int = 1) -> CaseResult:
+def _result(name: str, passed: bool, tool_match: bool | None = None, turns: int = 1, scenario: str = "s") -> CaseResult:
     return CaseResult(
+        scenario=scenario,
         name=name,
         passed=passed,
         failures=[] if passed else ["boom"],
@@ -48,7 +49,23 @@ def test_load_baseline_missing_returns_empty(tmp_path: Path) -> None:
     assert load_baseline(tmp_path / "nope.json") == {}
 
 
-def test_render_contains_marks_and_metrics() -> None:
-    """渲染含通过标记与汇总指标行。"""
-    text = render(Report(results=[_result("a", True, tool_match=True)]))
-    assert "✅" in text and "成功率" in text
+def test_scenario_metrics_group_by_scenario() -> None:
+    """逐场景汇总：各场景独立算成功率，互不混淆。"""
+    report = Report(
+        results=[
+            _result("a", True, scenario="calc"),
+            _result("b", False, scenario="calc"),
+            _result("c", True, scenario="greet"),
+        ]
+    )
+    scen = report.scenario_metrics()
+    assert set(scen) == {"calc", "greet"}
+    assert scen["calc"]["task_success_rate"] == 0.5
+    assert scen["greet"]["task_success_rate"] == 1.0
+
+
+def test_render_contains_marks_scenario_and_metrics() -> None:
+    """渲染含通过标记、场景名、场景指标与全局指标行。"""
+    text = render(Report(results=[_result("a", True, tool_match=True, scenario="calc")]))
+    assert "✅" in text and "【calc】" in text
+    assert "场景指标" in text and "全局指标" in text

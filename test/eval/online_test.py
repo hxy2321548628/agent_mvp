@@ -11,7 +11,7 @@ from eval.runner import default_registry, evaluate, run_online
 from src.config import Settings
 from src.llm.base import Usage
 from src.llm.deepseek_client import DeepSeekClient
-from src.message import AIMessage, Message
+from src.schema.message import AIMessage, Message
 
 
 class _FakeLLM:
@@ -32,10 +32,10 @@ class _FakeLLM:
 def test_run_online_scores_with_injected_llm(tmp_path: Path) -> None:
     """run_online 用同一注入 LLM 跑多条用例、与空基线 diff：管线打分正确、无回归。"""
     cases = [
-        Case(name="a", input="hi", cassette="x", expect=Expect(answer_contains="96")),
-        Case(name="b", input="hi", cassette="x", expect=Expect(answer_contains="你好")),
+        Case(scenario="s", name="a", input="hi", expect=Expect(answer_contains="96")),
+        Case(scenario="s", name="b", input="hi", expect=Expect(answer_contains="你好")),
     ]
-    report, regressions = run_online(cases, _FakeLLM(), tmp_path / "trace", "m", tmp_path / "missing.json")
+    report, regressions = run_online(cases, _FakeLLM(), tmp_path / "trace", "m", tmp_path / "missing.json", parallel=2)
     assert report.metrics()["task_success_rate"] == 1.0
     assert regressions == []
 
@@ -57,7 +57,7 @@ def test_online_eval_real_api_runs(tmp_path: Path) -> None:
     if not settings.DEEPSEEK_API_KEY:
         pytest.skip("需要真实 DEEPSEEK_API_KEY")
     client = DeepSeekClient.from_credentials(settings.DEEPSEEK_API_KEY, settings.DEEPSEEK_BASE_URL, settings.DEEPSEEK_MODEL, settings.DEEPSEEK_PROXY)
-    case = Case(name="calc", input="只回答数字：12*8 等于多少？", cassette="x", expect=Expect(answer_contains="96"))
+    case = Case(scenario="calc", name="calc", input="只回答数字：12*8 等于多少？", expect=Expect(answer_contains="96"))
     result = evaluate(case, client, default_registry(), tmp_path / "trace", settings.DEEPSEEK_MODEL)
     assert result.turns >= 1
     assert isinstance(result.passed, bool)

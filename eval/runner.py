@@ -1,30 +1,27 @@
 """评测执行 runner.py：跑 Case（注入 LLM：回放盒 / 真实客户端），评断言、算指标。
 
 `evaluate` 是与 LLM 无关的核心；`run_case`/`run_eval` 走录制回放（确定性、CI）；`run_online`
-注入真实客户端做在线打分。工具真实执行（calculator 等确定性工具），唯 LLM 来源不同。
+注入真实客户端做在线打分。中间件栈走 `src` 的 `build_middlewares` 单一事实源（eval 关 I/O、
+自动放行、单轮不压缩），与 cli 同源。工具真实执行（calculator 等确定性工具），唯 LLM 来源不同。
 """
 
 from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from eval.case import Case, Expect, load_cases
 from eval.replay import ReplayLLMClient, load_cassette
 from eval.report import CaseResult, Report, diff_baseline, load_baseline
-from src.config import BACKOFF, DANGER_PATTERN, MAX_RETRY, MAX_TURN, MODEL_PRICE, Settings
+from src.config import MODEL_PRICE, Settings
 from src.llm.base import LLMClient
-from src.message import HumanMessage
-from src.middleware.approval import ApprovalMiddleware
-from src.middleware.base import Middleware
-from src.middleware.max_turn import MaxTurnMiddleware
-from src.middleware.observe import ObserveMiddleware
-from src.middleware.prefix import SessionPrefixMiddleware, build_runtime_env
-from src.middleware.retry import RetryMiddleware
 from src.runtime import AgentRuntime
-from src.state import AgentState, RunContext, RunTrace
+from src.schema.message import HumanMessage
+from src.schema.state import AgentState, RunContext, RunTrace
 from src.tool.calculator import CalculatorTool
 from src.tool.registry import ToolRegistry
 from src.tool.todo import TodoStore, TodoTool
 from src.tool.weather import WeatherTool
+from src.util.stack import build_middlewares
 
 
 def default_registry() -> ToolRegistry:
@@ -33,22 +30,6 @@ def default_registry() -> ToolRegistry:
     for tool in (CalculatorTool(), WeatherTool(), TodoTool(TodoStore())):
         registry.register(tool)
     return registry
-
-
-def _eval_middlewares(registry: ToolRegistry, settings: Settings, trace_dir: Path, model: str) -> list[Middleware]:
-    """评测中间件栈：镜像生产「行为相关」中间件，去掉纯 I/O 的 Log/Trace。
-
-    含 SessionPrefix（系统提示——在线评测保真的关键）、Observe（指标）、MaxTurn（防失控循环）、
-    Approval（自动放行，当前确定性工具不触发）、Retry（在线抗瞬时 API 错误）。
-    不含 Context：评测用例为单轮输入、不会触发压缩（压缩另有单测覆盖）。
-    """
-    return [
-        SessionPrefixMiddleware(todo=TodoStore(), env=build_runtime_env(settings)),
-        ObserveMiddleware(trace_dir=str(trace_dir), model=model),
-        MaxTurnMiddleware(max_turn=MAX_TURN),
-        ApprovalMiddleware(requires_approval=registry.requires_approval, confirm=lambda _call: True, danger_pattern=DANGER_PATTERN),
-        RetryMiddleware(max_retry=MAX_RETRY, backoff=BACKOFF),
-    ]
 
 
 def _check(expect: Expect, tools: list[str], answer: str, turns: int) -> list[str]:
@@ -67,17 +48,30 @@ def _check(expect: Expect, tools: list[str], answer: str, turns: int) -> list[st
 
 def evaluate(case: Case, llm: LLMClient, registry: ToolRegistry, trace_dir: Path, model: str) -> CaseResult:
     """跑单条用例：注入的 LLM（回放 / 真实）+ 真实工具，收 RunTrace，评断言、算指标。"""
-    state = AgentState(thread_id=case.name)
+    thread_id = f"{case.scenario}/{case.name}" if case.scenario else case.name
+    state = AgentState(thread_id=thread_id)
     state.messages.append(HumanMessage(content=case.input))
     ctx = RunContext(state=state, tools_schema=registry.to_schema())
     settings = Settings()
-    middlewares = _eval_middlewares(registry, settings, trace_dir, model)
+    middlewares = build_middlewares(
+        llm=llm,
+        registry=registry,
+        todo_store=TodoStore(),
+        settings=settings,
+        confirm=lambda _call: True,
+        trace_dir=str(trace_dir),
+        model=model,
+        log=False,
+        trace_sink=None,
+        context=False,
+    )
     answer = AgentRuntime(llm=llm, registry=registry, middlewares=middlewares, settings=settings).run(ctx)
-    trace = ctx.trace or RunTrace(run_id=ctx.run_id, thread_id=case.name)
+    trace = ctx.trace or RunTrace(run_id=ctx.run_id, thread_id=thread_id)
     tools = [name for turn in trace.turns for name in turn.tool_calls]
     failures = _check(case.expect, tools, answer, len(trace.turns))
     tool_match = (tools == case.expect.tool_sequence) if case.expect.tool_sequence is not None else None
     return CaseResult(
+        scenario=case.scenario,
         name=case.name,
         passed=not failures,
         failures=failures,
@@ -90,8 +84,8 @@ def evaluate(case: Case, llm: LLMClient, registry: ToolRegistry, trace_dir: Path
 
 
 def run_case(case: Case, cassette_dir: Path, registry: ToolRegistry, trace_dir: Path, model: str) -> CaseResult:
-    """录制回放单条用例（确定性）：从 cassette 建 ReplayLLMClient 后委托 evaluate。"""
-    responses, usages = load_cassette(cassette_dir / case.cassette)
+    """录制回放单条用例（确定性）：从场景 cassette 按 name 取录制建 ReplayLLMClient 后委托 evaluate。"""
+    responses, usages = load_cassette(cassette_dir / f"{case.scenario}.jsonl")[case.name]
     return evaluate(case, ReplayLLMClient(responses, usages), registry, trace_dir, model)
 
 
@@ -101,31 +95,49 @@ def run_suite(
     trace_dir: Path,
     model: str,
     registry_factory: Callable[[], ToolRegistry] = default_registry,
+    parallel: int = 1,
 ) -> Report:
-    """跑全部用例：llm_factory(case) 决定每条用回放盒还是真实客户端；每条一份新 registry 隔离工具状态。"""
-    results = [evaluate(case, llm_factory(case), registry_factory(), trace_dir, model) for case in cases]
+    """跑全部用例：llm_factory(case) 决定每条用回放盒还是真实客户端；每条一份新 registry 隔离工具状态。
+
+    `parallel>1` 时用 ThreadPoolExecutor 并发跑各用例（用例 I/O 密集、彼此隔离）；客户端在主线程
+    串行构建（廉价、避开回放盒缓存竞争），`map` 保序故结果顺序稳定。
+    """
+    jobs = [(case, llm_factory(case)) for case in cases]
+
+    def work(job: tuple[Case, LLMClient]) -> CaseResult:
+        case, llm = job
+        return evaluate(case, llm, registry_factory(), trace_dir, model)
+
+    if parallel <= 1:
+        results = [work(job) for job in jobs]
+    else:
+        with ThreadPoolExecutor(max_workers=parallel) as executor:
+            results = list(executor.map(work, jobs))
     return Report(results=results)
 
 
 def _replay_factory(cassette_dir: Path) -> Callable[[Case], LLMClient]:
-    """造「按 case 取 cassette → ReplayLLMClient」的工厂（回放评测用）。"""
+    """造「按 case 取场景 cassette → ReplayLLMClient」的工厂（回放评测用），按场景缓存已加载的回放盒。"""
+    cache: dict[str, dict[str, tuple]] = {}
 
     def make(case: Case) -> LLMClient:
-        responses, usages = load_cassette(cassette_dir / case.cassette)
+        if case.scenario not in cache:
+            cache[case.scenario] = load_cassette(cassette_dir / f"{case.scenario}.jsonl")
+        responses, usages = cache[case.scenario][case.name]
         return ReplayLLMClient(responses, usages)
 
     return make
 
 
 def run_eval(case_dir: Path, cassette_dir: Path, trace_dir: Path, baseline_path: Path, model: str) -> tuple[Report, list[str]]:
-    """录制回放全链路：加载 → 回放跑 → 与基线 diff，返回 (报告, 回归列表)。"""
+    """录制回放全链路：加载 → 回放跑（确定性，串行）→ 与基线 diff，返回 (报告, 回归列表)。"""
     report = run_suite(load_cases(case_dir), _replay_factory(cassette_dir), trace_dir, model)
     regressions = diff_baseline(report.metrics(), load_baseline(baseline_path))
     return report, regressions
 
 
-def run_online(cases: list[Case], llm: LLMClient, trace_dir: Path, model: str, baseline_path: Path) -> tuple[Report, list[str]]:
-    """在线打分全链路：用同一真实 LLM 跑全部用例 → 与在线基线 diff，返回 (报告, 回归列表)。"""
-    report = run_suite(cases, lambda _case: llm, trace_dir, model)
+def run_online(cases: list[Case], llm: LLMClient, trace_dir: Path, model: str, baseline_path: Path, parallel: int = 1) -> tuple[Report, list[str]]:
+    """在线打分全链路：用同一真实 LLM 并发跑全部用例 → 与在线基线 diff，返回 (报告, 回归列表)。"""
+    report = run_suite(cases, lambda _case: llm, trace_dir, model, parallel=parallel)
     regressions = diff_baseline(report.metrics(), load_baseline(baseline_path))
     return report, regressions

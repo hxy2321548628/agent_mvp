@@ -1,6 +1,8 @@
-"""评测用例 case.py：一条 Case = 用户输入 + 录制回放盒(cassette) + 期望断言(Expect)。
+"""评测用例 case.py：一条 Case = 用户输入 + 期望断言(Expect)；按「场景」组织。
 
-用 JSON（零依赖、stdlib 可读），不引入 YAML。每条断言可选，提供哪条就断哪条。
+数据形态：一个 `<场景>.jsonl` 文件代表一个场景，每行一条 Case（场景名 = 文件 stem）。
+录制回放盒按 `(场景, name)` 键配对（见 replay.py），故 Case 不再持有 cassette 文件名。
+用 JSONL（零依赖、stdlib 可读、append 友好），不引入 YAML。每条断言可选，提供哪条就断哪条。
 """
 
 from pathlib import Path
@@ -19,19 +21,23 @@ class Expect(BaseModel):
 
 
 class Case(BaseModel):
-    """一条评测用例：name 唯一、input 用户输入、cassette 回放盒文件名、expect 断言集。"""
+    """一条评测用例：scenario 场景名（加载时按文件 stem 注入）、name 场景内唯一、input 用户输入、expect 断言集。"""
 
+    scenario: str = ""  # 所属场景（= jsonl 文件 stem，加载时注入；与 cassette 同名 jsonl 按 name 配对）
     name: str
     input: str
-    cassette: str
     expect: Expect = Field(default_factory=Expect)
 
 
-def load_case(path: Path) -> Case:
-    """从 JSON 文件加载一条 Case。"""
-    return Case.model_validate_json(path.read_text(encoding="utf-8"))
+def load_scenario(path: Path) -> list[Case]:
+    """加载一个场景 jsonl：逐行解析为 Case，并注入 scenario = 文件 stem（空行跳过）。"""
+    cases: list[Case] = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if line.strip():
+            cases.append(Case.model_validate_json(line).model_copy(update={"scenario": path.stem}))
+    return cases
 
 
 def load_cases(case_dir: Path) -> list[Case]:
-    """加载目录下全部 *.json 用例（按文件名排序，确保稳定）。"""
-    return [load_case(path) for path in sorted(case_dir.glob("*.json"))]
+    """加载目录下全部 `*.jsonl` 场景（按文件名排序确保稳定），展平为用例列表。"""
+    return [case for path in sorted(case_dir.glob("*.jsonl")) for case in load_scenario(path)]

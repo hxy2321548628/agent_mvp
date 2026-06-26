@@ -1,0 +1,1 @@
+{"name": "greet", "input": "你好", "expect": {"must_not_call": ["calculator"], "answer_contains": "你好"}}
