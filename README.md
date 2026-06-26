@@ -14,6 +14,8 @@
 
 核心约束自始至终是：**核心 Runtime 完全自研，不用现成 Agent 框架**，但允许借鉴成熟框架的设计模式。整个过程采用 **TDD**，关注 SOLID 与依赖注入，并写有一套[设计思路文档](doc/agent-design/)。
 
+Bilibili 介绍：https://www.bilibili.com/video/BV1227V6FEUj/?spm_id_from=333.1387.homepage.video_card.click&vd_source=848cfd56f5b611313d69d0120f813bfe
+
 ## ✨ 特性
 
 | 能力 | 说明 |
