@@ -1,0 +1,9 @@
+{
+  "name": "greet",
+  "input": "你好",
+  "cassette": "greet.json",
+  "expect": {
+    "must_not_call": ["calculator"],
+    "answer_contains": "你好"
+  }
+}

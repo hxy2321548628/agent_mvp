@@ -43,7 +43,7 @@ def test_filename_sanitizes_illegal_chars(tmp_path: Path) -> None:
     state.messages.append(AIMessage(content="x"))
     LogMiddleware(log_dir=str(tmp_path), name_maxlen=50).after_model(RunContext(state=state))
     name = next(tmp_path.iterdir()).name
-    assert all(ch not in name for ch in '/?: ')
+    assert all(ch not in name for ch in "/?: ")
 
 
 def test_filename_truncates_to_maxlen(tmp_path: Path) -> None:

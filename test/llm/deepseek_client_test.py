@@ -12,7 +12,7 @@ from openai import APIConnectionError
 import pytest
 
 from src.config import REASONING_EFFORT, Settings
-from src.llm.base import EmptyLLMResponseError, LLMInfraError
+from src.llm.base import EmptyLLMResponseError, LLMInfraError, Usage
 from src.llm.deepseek_client import DeepSeekClient, _to_sdk_message
 from src.message import AIMessage, HumanMessage, SystemMessage, ToolCall, ToolMessage
 
@@ -164,6 +164,31 @@ def test_chat_stream_routes_reasoning_and_content_to_separate_sinks() -> None:
     assert answer == ["答", "案"]
     assert ai.reasoning_content == "想一下"
     assert ai.content == "答案"
+
+
+def test_chat_reports_usage_via_on_usage_non_stream() -> None:
+    """非流式：completion.usage（含 prompt_cache_hit_tokens）经 on_usage 映射成内部 Usage。"""
+    completion = _sdk_completion("ok", None)
+    completion.usage = SimpleNamespace(prompt_tokens=12, completion_tokens=4, prompt_cache_hit_tokens=9, prompt_cache_miss_tokens=3)
+    client, _ = _client_with(completion)
+    captured: list[Usage] = []
+    client.chat([HumanMessage(content="x")], tools=None, on_usage=captured.append)
+    assert len(captured) == 1
+    assert (captured[0].prompt_tokens, captured[0].completion_tokens) == (12, 4)
+    assert (captured[0].cache_hit_tokens, captured[0].cache_miss_tokens) == (9, 3)
+
+
+def test_chat_reports_usage_via_on_usage_stream() -> None:
+    """流式：含 usage 的尾块（choices 为空）经 on_usage 回调，且 content 拼接不受影响。"""
+    chunks: Iterator[SimpleNamespace] = iter(
+        [_sdk_chunk(content="Hi"), SimpleNamespace(choices=[], usage=SimpleNamespace(prompt_tokens=5, completion_tokens=1))]
+    )
+    client, completions = _client_with(chunks)
+    captured: list[Usage] = []
+    ai = client.chat([HumanMessage(content="x")], tools=None, on_token=lambda _t: None, on_usage=captured.append)
+    assert ai.content == "Hi"
+    assert captured[0].prompt_tokens == 5
+    assert completions.last_kwargs["stream_options"] == {"include_usage": True}
 
 
 def test_to_sdk_message_round_trips_reasoning_on_tool_call_turn() -> None:

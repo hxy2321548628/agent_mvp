@@ -22,3 +22,7 @@ doc/interview
 # Per-session run logs
 log/
 tmp/
+
+# Runtime structured traces (ObserveMiddleware / eval replay)
+trace/
+eval/run/

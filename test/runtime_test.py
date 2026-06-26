@@ -3,6 +3,7 @@
 from collections.abc import Callable
 
 from src.config import Settings
+from src.llm.base import Usage
 from src.message import AIMessage, HumanMessage, Message, ToolCall
 from src.middleware.base import Middleware
 from src.middleware.max_turn import MaxTurnMiddleware
@@ -27,6 +28,7 @@ class FakeLLMClient:
         on_token: Callable[[str], None] | None = None,
         on_reasoning: Callable[[str], None] | None = None,
         reasoning: bool = False,
+        on_usage: Callable[[Usage], None] | None = None,
     ) -> AIMessage:
         response = self._responses[min(self.calls, len(self._responses) - 1)]
         self.calls += 1
@@ -48,6 +50,7 @@ class StreamingFakeLLM:
         on_token: Callable[[str], None] | None = None,
         on_reasoning: Callable[[str], None] | None = None,
         reasoning: bool = False,
+        on_usage: Callable[[Usage], None] | None = None,
     ) -> AIMessage:
         response = self._responses[min(self.calls, len(self._responses) - 1)]
         self.calls += 1

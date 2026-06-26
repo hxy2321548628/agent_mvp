@@ -7,7 +7,7 @@
 from collections.abc import Callable
 
 from src.config import Settings
-from src.llm.base import LLMClient
+from src.llm.base import LLMClient, Usage
 from src.message import AIMessage, ToolMessage
 from src.middleware.base import Middleware, ModelHandler, ToolHandler
 from src.state import Event, RunContext
@@ -70,7 +70,7 @@ class AgentRuntime:
 
         def base(c: RunContext) -> AIMessage:
             on_token, on_reasoning = self._stream_sinks(c)
-            return self._llm.chat(c.state.messages, c.tools_schema, on_token, on_reasoning, c.reasoning)
+            return self._llm.chat(c.state.messages, c.tools_schema, on_token, on_reasoning, c.reasoning, self._usage_sink(c))
 
         handler: ModelHandler = base
         for mw in reversed(self._middlewares):
@@ -84,6 +84,15 @@ class AgentRuntime:
             on_event = ctx.on_event
             return (lambda t: on_event(Event(kind="answer", text=t)), lambda t: on_event(Event(kind="reasoning", text=t)))
         return ctx.on_token, None
+
+    @staticmethod
+    def _usage_sink(ctx: RunContext) -> Callable[[Usage], None]:
+        """造一个把本轮 token 计量挂到 ctx.last_usage 的回调（供 ObserveMiddleware 读取）。"""
+
+        def sink(usage: Usage) -> None:
+            ctx.last_usage = usage
+
+        return sink
 
     def _tool_chain(self, ctx: RunContext) -> ToolMessage:
         """用 wrap_tool_call 洋葱包住真实 registry.execute（列表首个在最外层）。"""

@@ -12,7 +12,7 @@ from typing import Self
 import httpx
 from openai import APIConnectionError, InternalServerError, OpenAI, RateLimitError
 
-from src.llm.base import EmptyLLMResponseError, LLMInfraError
+from src.llm.base import EmptyLLMResponseError, LLMInfraError, Usage
 from src.message import AIMessage, Message, ToolCall, ToolMessage
 
 
@@ -60,6 +60,18 @@ def _parse_arguments(raw_arguments: str) -> dict[str, object]:
     return parsed if isinstance(parsed, dict) else {}
 
 
+def _extract_usage(raw: object) -> Usage:
+    """把 SDK 的 usage 对象映射成内部 Usage；缺字段（非 DeepSeek 端点无 cache 计量）→ 0。"""
+    if raw is None:
+        return Usage()
+    return Usage(
+        prompt_tokens=getattr(raw, "prompt_tokens", 0) or 0,
+        completion_tokens=getattr(raw, "completion_tokens", 0) or 0,
+        cache_hit_tokens=getattr(raw, "prompt_cache_hit_tokens", 0) or 0,
+        cache_miss_tokens=getattr(raw, "prompt_cache_miss_tokens", 0) or 0,
+    )
+
+
 def _parse_message(message: object) -> AIMessage:
     """非流式 message → AIMessage（content=答案，reasoning_content=思考，tool_calls=动作意图）。"""
     raw_tool_calls = message.tool_calls or []
@@ -88,13 +100,18 @@ def _build_stream_tool_call(slot: dict[str, str]) -> ToolCall:
     return ToolCall(id=slot["id"], name=slot["name"], arguments=_parse_arguments(slot["arguments"]))
 
 
-def _parse_stream(stream: Iterable[object], on_token: Callable[[str], None], on_reasoning: Callable[[str], None] | None) -> AIMessage:
-    """消费流式分片：content 增量喂 on_token、reasoning 增量喂 on_reasoning，tool_call 分片按 index 拼回，返回完整 AIMessage。"""
+def _parse_stream(stream: Iterable[object], on_token: Callable[[str], None], on_reasoning: Callable[[str], None] | None) -> tuple[AIMessage, Usage]:
+    """消费流式分片：content/reasoning 增量分别回调、tool_call 分片按 index 拼回；含 usage 的尾块计入计量。"""
     content_parts: list[str] = []
     reasoning_parts: list[str] = []
     fragments: dict[int, dict[str, str]] = {}
     order: list[int] = []
+    usage = Usage()
     for chunk in stream:
+        if getattr(chunk, "usage", None) is not None:  # include_usage 的尾块（choices 为空）
+            usage = _extract_usage(chunk.usage)
+        if not chunk.choices:
+            continue
         delta = chunk.choices[0].delta
         if delta.content:
             content_parts.append(delta.content)
@@ -107,7 +124,8 @@ def _parse_stream(stream: Iterable[object], on_token: Callable[[str], None], on_
         for tool_delta in delta.tool_calls or []:
             _merge_tool_delta(fragments, order, tool_delta)
     tool_calls = [_build_stream_tool_call(fragments[index]) for index in order]
-    return AIMessage(content="".join(content_parts), reasoning_content="".join(reasoning_parts), tool_calls=tool_calls)
+    ai = AIMessage(content="".join(content_parts), reasoning_content="".join(reasoning_parts), tool_calls=tool_calls)
+    return ai, usage
 
 
 class DeepSeekClient:
@@ -147,8 +165,9 @@ class DeepSeekClient:
         on_token: Callable[[str], None] | None = None,
         on_reasoning: Callable[[str], None] | None = None,
         reasoning: bool = False,
+        on_usage: Callable[[Usage], None] | None = None,
     ) -> AIMessage:
-        """调用 DeepSeek 返回完整 AIMessage；on_token 非空走同步流式；reasoning 为真开启 thinking 模式。"""
+        """调用 DeepSeek 返回完整 AIMessage；on_token 非空走同步流式；reasoning 开启 thinking；on_usage 回调 token 计量。"""
         kwargs: dict[str, object] = {"model": self._model, "messages": [_to_sdk_message(m) for m in messages]}
         if tools:
             kwargs["tools"] = tools
@@ -159,11 +178,15 @@ class DeepSeekClient:
             if on_token is None:
                 completion = self._sdk.chat.completions.create(**kwargs)
                 ai = _parse_message(completion.choices[0].message)
+                usage = _extract_usage(getattr(completion, "usage", None))
             else:
+                kwargs["stream_options"] = {"include_usage": True}  # 让尾块带 usage（流式计量）
                 stream = self._sdk.chat.completions.create(stream=True, **kwargs)
-                ai = _parse_stream(stream, on_token, on_reasoning)
+                ai, usage = _parse_stream(stream, on_token, on_reasoning)
         except _RETRYABLE_SDK_ERROR as exc:
             raise LLMInfraError(str(exc)) from exc
         if not ai.content and not ai.tool_calls:  # 空响应视为异常，交 wrap_model_call 重试（DDD §11）
             raise EmptyLLMResponseError("LLM 返回空响应：content 与 tool_calls 同时为空")
+        if on_usage is not None:
+            on_usage(usage)
         return ai

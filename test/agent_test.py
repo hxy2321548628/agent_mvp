@@ -6,7 +6,7 @@ import pytest
 
 from src.agent import Agent
 from src.config import Settings
-from src.llm.base import LLMClient
+from src.llm.base import LLMClient, Usage
 from src.message import AIMessage, Message, ToolCall
 from src.runtime import AgentRuntime
 from src.session.checkpointer import InMemoryCheckpointer
@@ -30,6 +30,7 @@ class _ScriptedLLM:
         on_token: Callable[[str], None] | None = None,
         on_reasoning: Callable[[str], None] | None = None,
         reasoning: bool = False,
+        on_usage: Callable[[Usage], None] | None = None,
     ) -> AIMessage:
         self.seen_lengths.append(len(messages))
         return self._replies.pop(0)
@@ -100,6 +101,7 @@ def test_run_threads_on_token_to_llm() -> None:
             on_token: Callable[[str], None] | None = None,
             on_reasoning: Callable[[str], None] | None = None,
             reasoning: bool = False,
+            on_usage: Callable[[Usage], None] | None = None,
         ) -> AIMessage:
             received.append(on_token)
             return AIMessage(content="ok")
@@ -124,6 +126,7 @@ def test_run_threads_on_event_and_reasoning_to_llm() -> None:
             on_token: Callable[[str], None] | None = None,
             on_reasoning: Callable[[str], None] | None = None,
             reasoning: bool = False,
+            on_usage: Callable[[Usage], None] | None = None,
         ) -> AIMessage:
             seen["on_token"] = on_token
             seen["on_reasoning"] = on_reasoning
@@ -148,6 +151,7 @@ def test_state_persisted_even_when_runtime_raises() -> None:
             on_token: Callable[[str], None] | None = None,
             on_reasoning: Callable[[str], None] | None = None,
             reasoning: bool = False,
+            on_usage: Callable[[Usage], None] | None = None,
         ) -> AIMessage:
             raise RuntimeError("llm down")
 

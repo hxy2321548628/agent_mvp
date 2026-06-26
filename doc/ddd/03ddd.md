@@ -61,7 +61,7 @@ class RunTrace(BaseModel):
     def cost(self, price: dict) -> float: ...   # Σ token × MODEL_PRICE
 ```
 
-- `LLMClient.chat`（§7.1）**回传 `usage`**：`AIMessage` 不污染，改让 `chat` 返回 `(AIMessage, Usage)` 或在 `RunContext` 挂最近 usage。DeepSeek 的 `completion.usage` 含 `prompt_cache_hit_tokens`/`prompt_cache_miss_tokens`，直接映射。
+- `LLMClient.chat`（§7.1）**回传 `usage`**：`AIMessage` 不污染。落地选**新增 `on_usage` 回调形参**（与 `on_token`/`on_reasoning` 同风格，`chat` 仍返回 `AIMessage`，对既有调用与一众测试 fake 零破坏），运行时把它挂到 `RunContext.last_usage` 供 ObserveMiddleware 读取。DeepSeek 的 `completion.usage` 含 `prompt_cache_hit_tokens`/`prompt_cache_miss_tokens`，直接映射；流式靠 `stream_options.include_usage` 的尾块取计量。
 - `ObserveMiddleware`：`after_model` 收一条 `TurnRecord`，`on_session_end` 把 `RunTrace` 落 `trace/<thread_id>/<run_id>.jsonl`。
 - `config.py`：`TRACE_DIR`、`MODEL_PRICE`（档位→每百万 token 单价）。
 
@@ -73,7 +73,7 @@ class RunTrace(BaseModel):
 
 ```mermaid
 flowchart LR
-    case[case/*.yaml<br/>输入+期望断言] --> runner
+    case[case/*.json<br/>输入+期望断言] --> runner
     cassette[cassette/*.json<br/>录制的真实响应] --> replay[ReplayLLMClient]
     replay --> runner[runner 跑 ReAct]
     runner --> trace[复用 §25 RunTrace]
@@ -85,18 +85,20 @@ flowchart LR
 
 ### 26.1 四个构件（`eval/` 包）
 
-- **case**（`eval/case/*.yaml`）：`input`、期望断言（`tool_sequence`、`must_call`/`must_not_call`、`max_turns`、`answer_match` 正则/语义）。
+- **case**（`eval/case/*.json`，零依赖、stdlib 可读，未引入 YAML）：`input`、期望断言（`tool_sequence`、`must_call`/`must_not_call`、`max_turns`、`answer_contains` 子串）。
 - **cassette**（录制回放，类 VCR）：首跑真实 DeepSeek 把响应录成 fixture；回放时注入 `ReplayLLMClient`（实现 `LLMClient`，按调用序吐录制响应）→ **确定性**。录制与回放共享同一 case。
-- **runner**：跑 case → 收 §25 的 `RunTrace` → 跑断言 + 算指标（**工具选择准确率 / 任务成功率 / 平均轮数 / token 成本 / 时延**）。
+- **runner**：跑 case → 收 §25 的 `RunTrace` → 跑断言 + 算指标（**工具选择准确率 / 任务成功率 / 平均轮数 / token 成本 / 时延**）。评测运行时**镜像生产中间件栈**（SessionPrefix 系统提示 + Observe + MaxTurn + Approval 自动放行 + Retry），去掉纯 I/O 的 Log/Trace 与单轮永不触发的 Context——否则回放评测测不到这些中间件的回归、在线评测也不反映「真实系统提示下」的模型行为。
 - **report**：指标汇总 + 与基线 `baseline.json` diff，标出回归项。
 
 ### 26.2 运行与闸门
 
-- `make eval`：录制回放，**离线确定性**，进 CI；回归不过即红。
-- `make eval-live`：`@slow` 真实 API 冒烟，少量、看趋势不卡单点。
-- `config.py`：`EVAL_DIR`、`EVAL_CASE_DIR`、`EVAL_BASELINE`。
+- `make eval`：录制回放，**离线确定性**，进 CI；回归不过即红（守 src 编排）。
+- `make eval-online`：**真实 API 对 case 打分**（注入真实 `DeepSeekClient` 走同一 `evaluate` 链路，软指标，比在线基线 `baseline-online.json`），看「改动后效果是否变差」；无 KEY 优雅跳过。
+- `make eval-live`：`@slow` 客户端真实 API 冒烟（最轻量，仅验证「API 通不通」）。
+- 关键解耦：`run_case`（回放）与 `run_online`（真实）共用 `evaluate(case, llm, …)`——LLM 注入，回放盒↔真实客户端切换不改打分逻辑。
+- `config.py`：`EVAL_DIR`、`EVAL_CASE_DIR`、`EVAL_BASELINE`、`EVAL_ONLINE_BASELINE`。
 
-> 取舍：录制回放牺牲「模型真实漂移的覆盖」换「确定性 + 零成本」，由少量 live 冒烟补真实性；评测网的价值不在抓单次对错，而在**每次重构后秒级确认零行为回归**——这正是 §27–§31 敢动刀的底气。
+> 取舍：**离线回放守编排骨架（确定性、零成本、CI），在线打分看模型真实效果（非确定、软指标、比基线）**——两层分治。在线非确定，故宜用 `must_call`/`answer_contains` 软断言、少用精确 `tool_sequence`；评测网的价值在**每次重构后秒级确认零行为回归**，是 §27–§31 敢动刀的底气。
 
 ## 27. src 异步核心化（R13，对应 P18，边界隔离消费、无染色之痛）
 

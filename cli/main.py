@@ -2,18 +2,19 @@
 
 命令解析见 command.py（纯函数）；交互与窗口管理见 repl.py（Repl + Toggles）。
 本文件只做「构造具体依赖 → 注入 → 启动」这一件事，与 CLI 交互 UI 解耦。
-中间件顺序：SessionPrefix → Log → Trace → MaxTurn → Context → Approval → Retry。
+中间件顺序：SessionPrefix → Observe → Log → Trace → MaxTurn → Context → Approval → Retry。
 """
 
 from cli.repl import Repl, Toggles, ToolApproval, make_trace_sink
 from src.agent import Agent
-from src.config import BACKOFF, DANGER_PATTERN, KEEP_RECENT, LOG_DIR, LOG_NAME_MAXLEN, MAX_MSG, MAX_RETRY, MAX_TURN, STREAM, Settings
+from src.config import BACKOFF, DANGER_PATTERN, KEEP_RECENT, LOG_DIR, LOG_NAME_MAXLEN, MAX_MSG, MAX_RETRY, MAX_TURN, STREAM, TRACE_DIR, Settings
 from src.llm.deepseek_client import DeepSeekClient
 from src.middleware.approval import ApprovalMiddleware
 from src.middleware.base import Middleware
 from src.middleware.context import ContextMiddleware
 from src.middleware.log import LogMiddleware
 from src.middleware.max_turn import MaxTurnMiddleware
+from src.middleware.observe import ObserveMiddleware
 from src.middleware.prefix import SessionPrefixMiddleware, build_runtime_env
 from src.middleware.retry import RetryMiddleware
 from src.middleware.trace import TraceMiddleware
@@ -55,6 +56,7 @@ def build_agent(settings: Settings, toggles: Toggles) -> tuple[Agent, SessionMan
 
     middlewares: list[Middleware] = [
         SessionPrefixMiddleware(todo=todo_store, env=build_runtime_env(settings)),
+        ObserveMiddleware(trace_dir=TRACE_DIR, model=settings.DEEPSEEK_MODEL),
         LogMiddleware(log_dir=LOG_DIR, name_maxlen=LOG_NAME_MAXLEN),
         TraceMiddleware(sink=make_trace_sink(toggles)),
         MaxTurnMiddleware(max_turn=MAX_TURN),

@@ -89,4 +89,3 @@ Primary working directory: {workdir}
 - Model: {model}
 - Current date: {date}
 """
-

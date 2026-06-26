@@ -3,7 +3,6 @@
 库级运行参数（MAX_TURN/STREAM 等）见 src/config.py；本文件只放 CLI 自身的交互常量。
 """
 
-
 # —— 顶层参数（集中管理，不要硬编码进函数）——
 COMMAND_PREFIX = ":"  # 命令前缀：以此开头即命令，否则按普通对话处理
 DEFAULT_THREAD = "w1"  # 启动时的默认窗口（thread_id）

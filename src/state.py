@@ -4,9 +4,11 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Literal
+from uuid import uuid4
 
 from pydantic import BaseModel, Field
 
+from src.llm.base import Usage
 from src.message import Message, ToolCall, ToolMessage
 
 
@@ -36,6 +38,36 @@ class AgentState(BaseModel):
     messages: list[Message] = Field(default_factory=list)
 
 
+class TurnRecord(BaseModel):
+    """一轮 model-call 的机读记录：模型决策（选了哪些工具）、时延、token 计量。
+
+    tool_results 为该轮工具是否出错（after_tool 逐个追加），供评测看工具成败。
+    """
+
+    step: int
+    model: str
+    tool_calls: list[str] = Field(default_factory=list)
+    tool_results: list[bool] = Field(default_factory=list)
+    latency_ms: int = 0
+    usage: Usage = Field(default_factory=Usage)
+
+
+class RunTrace(BaseModel):
+    """一次 run 的结构化轨迹：逐轮 TurnRecord 累积，并能按价目表估算总成本。"""
+
+    run_id: str
+    thread_id: str
+    turns: list[TurnRecord] = Field(default_factory=list)
+
+    def cost(self, price: dict[str, dict[str, float]]) -> float:
+        """按 price（model → {input,output} 每百万 token 单价）估算总成本。"""
+        total = 0.0
+        for turn in self.turns:
+            tier = price.get(turn.model, {})
+            total += (turn.usage.prompt_tokens * tier.get("input", 0.0) + turn.usage.completion_tokens * tier.get("output", 0.0)) / 1_000_000
+        return total
+
+
 @dataclass
 class RunContext:
     """单次 run() 的运行上下文，传给中间件钩子（瞬态，不持久化）。
@@ -54,3 +86,6 @@ class RunContext:
     stop_reason: str | None = None  # 中间件可设此值提前终止 loop（如超轮次）
     current_tool_call: ToolCall | None = None  # 供 [工具调用前] 读取
     current_tool_result: ToolMessage | None = None  # 供 [工具调用后] 读取
+    run_id: str = field(default_factory=lambda: uuid4().hex[:12])  # 本次 run 唯一标识（trace 文件名）
+    last_usage: Usage | None = None  # 最近一次 llm.chat 的 token 计量（on_usage 回调挂入，ObserveMiddleware 读）
+    trace: RunTrace | None = None  # 本次 run 的结构化轨迹（ObserveMiddleware 逐轮填充）

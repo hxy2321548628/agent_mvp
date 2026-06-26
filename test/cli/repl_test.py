@@ -8,6 +8,7 @@ from rich.console import Console
 from cli.repl import Repl, Toggles, ToolApproval
 from src.agent import Agent
 from src.config import Settings
+from src.llm.base import Usage
 from src.message import AIMessage, Message, ToolCall
 from src.runtime import AgentRuntime
 from src.session.checkpointer import InMemoryCheckpointer
@@ -28,6 +29,7 @@ class _EchoLLM:
         on_token: Callable[[str], None] | None = None,
         on_reasoning: Callable[[str], None] | None = None,
         reasoning: bool = False,
+        on_usage: Callable[[Usage], None] | None = None,
     ) -> AIMessage:
         reply = f"echo:{messages[-1].content}"
         if reasoning and on_reasoning is not None:
@@ -134,7 +136,7 @@ def test_e2e_four_channels_rendered_with_tool_and_reasoning() -> None:
         def __init__(self) -> None:
             self.calls = 0
 
-        def chat(self, messages, tools, on_token=None, on_reasoning=None, reasoning=False):  # type: ignore[no-untyped-def]
+        def chat(self, messages, tools, on_token=None, on_reasoning=None, reasoning=False, on_usage=None):  # type: ignore[no-untyped-def]
             self.calls += 1
             if reasoning and on_reasoning is not None:
                 on_reasoning("先想想")
