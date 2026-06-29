@@ -1,1 +1,0 @@
-{"name": "greet", "turns": [{"content": "你好！有什么可以帮你的吗？", "usage": {"prompt_tokens": 30, "completion_tokens": 10}}]}

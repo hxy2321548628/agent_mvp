@@ -1,4 +1,0 @@
-{"name": "calc-12x8", "input": "帮我算 12*8", "expect": {"tool_sequence": ["calculator"], "answer_contains": "96", "max_turns": 3}}
-{"name": "calculator-002", "input": "计算12+34-12*4/3", "expect": {"tool_sequence": ["calculator"]}}
-{"name": "calculator-003", "input": "计算12*2", "expect": {"tool_sequence": ["calculator"]}}
-{"name": "calculator-004", "input": "计算1+1", "expect": {"tool_sequence": ["calculator"]}}

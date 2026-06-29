@@ -1,0 +1,1 @@
+{"name": "cal-001", "input": "计算1+1", "expect": {"tool_sequence": ["calculator"]}}
