@@ -74,23 +74,26 @@ graph TD
 
 ## 3.4 中间件列表与顺序——以及为什么是这个顺序
 
-组合根 [cli/main.py](../../cli/main.py) 按固定顺序装配中间件。顺序**不是随意**的，每一步都有理由：
+组合根经 [`build_middlewares`](../../src/util/stack.py)（`cli` 与 `eval` 共用的**单一事实源**，见 [10 §10.4](10-evaluation.md)）按固定顺序装配中间件。顺序**不是随意**的，每一步都有理由：
 
 ```
-SessionPrefix → Log → Trace → MaxTurn → Context → Approval → Retry
+SessionPrefix → Observe →[Record]→ Log → Trace → MaxTurn → Context → Approval → Retry
 ```
 
 | 顺序 | 中间件 | 主要钩子 | 为什么在这个位置 |
 |---|---|---|---|
 | 1 | **SessionPrefix** | `on_session_start` | 前缀要最先装配好，后续阶段（压缩、模型调用）才看得到完整的系统提示 |
-| 2 | **Log** | 顺序钩子 | 审计日志，常开；早注册以便记录到尽量靠前的事件 |
-| 3 | **Trace** | 顺序钩子 | 调试日志，stdout、可开关 |
-| 4 | **MaxTurn** | `before_model` | **必须在 Context 之前**：超轮次时直接短路终止，省掉一次无谓的上下文压缩（[plan/01plan.md](../plan/01plan.md) P6 完成标准） |
-| 5 | **Context** | `before_model` | 在真正调模型前把过长历史压缩好 |
-| 6 | **Approval** | `wrap_tool_call` | 环绕工具：**先问授权**，被拒就根本不进真实执行 |
-| 7 | **Retry** | `wrap_model_call` / `wrap_tool_call` | 环绕：放在 Approval **内层**——先决定「要不要做」，再谈「做失败了重试」 |
+| 2 | **Observe** | 顺序钩子 | 紧跟前缀、早注册，以便完整记录每轮 model-call 的 token/成本机读轨迹（[10 §10.2](10-evaluation.md)） |
+| 3 | **Log** | 顺序钩子 | 审计日志，常开；早注册以便记录到尽量靠前的事件 |
+| 4 | **Trace** | 顺序钩子 | 调试日志，stdout、可开关 |
+| 5 | **MaxTurn** | `before_model` | **必须在 Context 之前**：超轮次时直接短路终止，省掉一次无谓的上下文压缩（[plan/01plan.md](../plan/01plan.md) P6 完成标准） |
+| 6 | **Context** | `before_model` | 在真正调模型前把过长历史压缩好 |
+| 7 | **Approval** | `wrap_tool_call` | 环绕工具：**先问授权**，被拒就根本不进真实执行 |
+| 8 | **Retry** | `wrap_model_call` / `wrap_tool_call` | 环绕：放在 Approval **内层**——先决定「要不要做」，再谈「做失败了重试」 |
 
-> 顺序钩子（1–5）与环绕钩子（6–7）混在同一个列表里，互不干扰：`_fire` 只遍历顺序钩子，`_model_chain`/`_tool_chain` 只组装环绕钩子。一个中间件可以同时实现两类钩子。
+> `[Record]`（在线录制）是可选中间件：仅当 CLI 用 `:cassette` 录制时插在 Observe 之后；`Log`/`Trace`/`Context` 同为开关项（`eval` 关 I/O、单轮不压缩）。行为核心恒在且同序，差异收敛为 `build_middlewares` 的几个具名开关（见 [10 §10.4/§10.6](10-evaluation.md)）。
+
+> 顺序钩子（1–6）与环绕钩子（7–8）混在同一个列表里，互不干扰：`_fire` 只遍历顺序钩子，`_model_chain`/`_tool_chain` 只组装环绕钩子。一个中间件可以同时实现两类钩子。
 
 ## 3.5 终止与兜底
 

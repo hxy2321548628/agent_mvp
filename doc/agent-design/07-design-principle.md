@@ -42,7 +42,7 @@
 
 ## 7.2 组合根：唯一碰「具体」的地方
 
-依赖倒置要有个落地点：**组合根**（Composition Root）。本项目的组合根是 [cli/main.py](../../cli/main.py) 的 `build_agent`——只有它实例化具体依赖（DeepSeek 客户端、10 个工具、内存 Checkpointer、有序中间件列表），装配后注入出一个可用的 `Agent`。
+依赖倒置要有个落地点：**组合根**（Composition Root）。本项目的组合根是 [cli/main.py](../../cli/main.py) 的 `build_agent`——只有它实例化具体依赖（DeepSeek 客户端、10 个工具、内存 Checkpointer，并经 [`build_middlewares`](../../src/util/stack.py) 取得有序中间件列表），装配后注入出一个可用的 `Agent`。中间件的顺序固化在 `build_middlewares` 里、由 `cli` 与 `eval` 共用，避免两份手维护的列表漂移（[10 §10.4](10-evaluation.md)）。
 
 > 心法：**「构造」与「使用」分离**。业务代码只「使用」注入进来的抽象；「构造」具体实现这件脏活集中在组合根一处。这样依赖关系一目了然，替换实现只改一个地方。`cli/main.py` 因此被刻意保持成「造依赖 → 注入 → 启动」的薄壳。
 

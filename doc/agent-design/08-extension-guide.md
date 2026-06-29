@@ -67,7 +67,7 @@ for tool in tools:
 from collections.abc import Callable
 from src.middleware.base import Middleware
 from src.util.event import format_tool_call_event   # 复用现成格式化
-from src.state import RunContext
+from src.schema.state import RunContext
 
 class AuditMiddleware(Middleware):
     """把每次工具调用上报合规 sink（顺序钩子 before_tool）。sink 依赖注入。"""
@@ -81,11 +81,14 @@ class AuditMiddleware(Middleware):
 
 > 选哪个钩子？看 [03 §3.6](03-runtime-and-middleware.md)：只读写 `ctx`、记录/注入 → **顺序钩子**；要控制真实调用的时机/次数（重试、拦截、限流后阻断）→ **环绕钩子** `wrap_*`。审计只是记录，用顺序钩子 `before_tool` 即可。
 
-### 步骤 2 — 在组合根插入到正确位置
+### 步骤 2 — 在装配工厂插入到正确位置
+
+有序的中间件列表是 `cli`/`eval` 共用的单一事实源 [`build_middlewares`](../../src/util/stack.py)（[03 §3.4](03-runtime-and-middleware.md) / [10 §10.4](10-evaluation.md)），新增「行为相关」中间件只改这一处，`eval` 自动跟上：
 
 ```python
 middlewares = [
     SessionPrefixMiddleware(...),
+    ObserveMiddleware(...),
     AuditMiddleware(sink=compliance_sink),   # ← 放在工具相关中间件之前
     LogMiddleware(...), TraceMiddleware(...),
     MaxTurnMiddleware(...), ContextMiddleware(...),
@@ -110,11 +113,12 @@ middlewares = [
 
 ```python
 class MyLLMClient:
-    def chat(self, messages, tools, on_token=None, on_reasoning=None, reasoning=False) -> AIMessage:
+    def chat(self, messages, tools, on_token=None, on_reasoning=None, reasoning=False, on_usage=None) -> AIMessage:
         # 1. 把内部 Message 列表转成你家 API 的格式
         # 2. 调你家 API；流式则把增量喂 on_token / on_reasoning
         # 3. 把返回映射回内部 AIMessage（content / reasoning_content / tool_calls）
         # 4. 连接期失败翻译成 LLMInfraError；空响应抛 EmptyLLMResponseError
+        # 5. on_usage 非空则回调本次 token 计量（供 Observe 估算成本，见 10）
         ...
 ```
 

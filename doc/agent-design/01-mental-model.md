@@ -1,6 +1,6 @@
 # 01 · 心智模型与总览
 
-> 读完本篇，你应当能用一句话向别人解释「这个 Agent 是怎么转起来的」，并在脑中画出七大模块的协作图。
+> 读完本篇，你应当能用一句话向别人解释「这个 Agent 是怎么转起来的」，并在脑中画出核心模块的协作图。
 
 ## 1.1 它是什么
 
@@ -23,7 +23,7 @@
 
 > 取舍小结：当流程是**简单、确定**的，「主循环 + 生命周期钩子」比「状态图」更清晰可维护；代价是面对**开放式动态任务规划**时不如图灵活（见 [DDD §14](../ddd/01ddd.md) 开放问题）。我们刻意选了前者。
 
-## 1.3 七大模块职责地图
+## 1.3 核心模块职责地图
 
 ```mermaid
 graph TD
@@ -48,26 +48,30 @@ graph TD
     llm["llm/ LLMClient 协议<br/>+ DeepSeek 实现"]
     tool["tool/ Tool 协议 + Registry<br/>+ 10 个具体工具"]
     session["session/ Checkpointer<br/>+ SessionManager"]
-    state["message.py / state.py<br/>消息与状态类型"]
+    schema["schema/ 纯数据类型<br/>消息子类 + AgentState/RunContext"]
+    util["util/ 装配 + 共用 helper<br/>stack(组装MW)/event/system_prompt"]
 
     main --> agent
+    main --> util
     repl --> agent
     agent --> runtime
     agent --> session
     runtime --> MW
     runtime --> llm
     runtime --> tool
-    runtime --> state
-    session --> state
+    runtime --> schema
+    session --> schema
+    util -.装配.-> MW
 ```
 
 一句话记住每个模块：
 
 | 模块 | 一句话职责 |
 |---|---|
-| `message.py` / `state.py` | 数据类型：消息子类、持久态 `AgentState`、瞬态 `RunContext` |
+| `schema/` | 纯数据定义（无行为）：`message.py` 消息子类、`state.py` 持久态 `AgentState` + 瞬态 `RunContext` |
 | `runtime.py` | ReAct 主循环；只管主干，按阶段触发钩子 |
 | `middleware/` | 横切关注点的家；每个关注点一个中间件，可插拔 |
+| `util/` | 非中间件 helper：`stack.py` 装配默认中间件栈（cli/eval 单一事实源）、`system_prompt.py` 提示常量、`event.py` 事件格式化 |
 | `llm/` | LLM 抽象（协议）+ DeepSeek 实现（function calling、流式、推理） |
 | `tool/` | 工具抽象（协议）+ 注册表 + 具体工具；开闭扩展点 |
 | `session/` | 按 `thread_id` 隔离的会话状态存取与持久化 |
