@@ -10,7 +10,12 @@ import re
 from src.middleware.base import Middleware
 from src.schema.message import HumanMessage
 from src.schema.state import AgentState, RunContext
-from src.util.event import format_model_event, format_tool_call_event, format_tool_result_event
+from src.util.event import (
+    format_model_event,
+    format_tool_call_event,
+    format_tool_result_event,
+    format_user_event,
+)
 
 
 # —— 顶层参数 ——
@@ -25,10 +30,12 @@ class LogMiddleware(Middleware):
     def __init__(self, log_dir: str, name_maxlen: int) -> None:
         self._dir = Path(log_dir)
         self._maxlen = name_maxlen
-        self._paths: dict[str, Path] = {}  # thread_id → 文件路径（首次算定后缓存，保证稳定）
+        self._paths: dict[str, Path] = (
+            {}
+        )  # thread_id → 文件路径（首次算定后缓存，保证稳定）
 
     def on_session_start(self, ctx: RunContext) -> None:
-        self._write(ctx, "session_start")
+        self._write(ctx, format_user_event(ctx))
 
     def after_model(self, ctx: RunContext) -> None:
         self._write(ctx, format_model_event(ctx))
@@ -58,6 +65,8 @@ class LogMiddleware(Middleware):
 
     def _filename(self, state: AgentState) -> str:
         """文件名 = 创建时间 + 清洗截断的首条用户提问。"""
-        first = next((m.content for m in state.messages if isinstance(m, HumanMessage)), "")
+        first = next(
+            (m.content for m in state.messages if isinstance(m, HumanMessage)), ""
+        )
         slug = ILLEGAL_CHARS.sub("_", first).strip("_")[: self._maxlen] or DEFAULT_SLUG
         return f"{state.created_at}-{slug}.log"

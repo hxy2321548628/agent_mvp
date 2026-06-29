@@ -3,7 +3,7 @@
 返回「事件正文」，不含线程/步数等前缀；各中间件自行加前缀并决定落点（stdout / 文件）。
 """
 
-from src.schema.message import AIMessage
+from src.schema.message import AIMessage, HumanMessage
 from src.schema.state import RunContext
 
 
@@ -28,3 +28,10 @@ def format_tool_result_event(ctx: RunContext) -> str:
     result = ctx.current_tool_result
     status = "error" if result.is_error else "ok"
     return f"tool_result [{status}] {result.content!r}"
+
+
+def format_user_event(ctx: RunContext) -> str:
+    """用户输入"""
+    user = ctx.state.messages[-1]
+
+    return f"user content={user.content!r}"

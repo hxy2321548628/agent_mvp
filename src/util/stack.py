@@ -42,7 +42,7 @@ def build_middlewares(
     """组装默认中间件栈。cli 全开（log/trace/context + 交互确认 + 可选录制），eval 关 I/O、自动放行、单轮不压缩。"""
     middlewares: list[Middleware] = [
         SessionPrefixMiddleware(todo=todo_store, env=build_runtime_env(settings)),
-        ObserveMiddleware(trace_dir=trace_dir, model=model),
+        # ObserveMiddleware(trace_dir=trace_dir, model=model),
     ]
     if record_control is not None:
         middlewares.append(RecordMiddleware(record_control, cassette_dir, case_dir))
