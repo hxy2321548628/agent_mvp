@@ -75,7 +75,7 @@ def _eval_node(node):
 def chat(self, messages, tools, on_token=None, on_reasoning=None, reasoning=False, on_usage=None) -> AIMessage: ...
 ```
 
-> 末位 `on_usage` 是三期可观测加的回调：与 `on_token`/`on_reasoning` 同风格，把本次调用的 token 计量（含 DeepSeek 前缀缓存命中/未命中）回调出去，由运行时挂到 `RunContext.last_usage` 供 `ObserveMiddleware` 读取——不改返回值、不污染 `AIMessage`（见 [10 §10.2](10-evaluation.md)）。
+> 末位 `on_usage` 是三期可观测加的回调：与 `on_token`/`on_reasoning` 同风格，把本次调用的 token 计量（含 DeepSeek 前缀缓存命中/未命中）回调出去，由运行时挂到 `RunContext.last_usage` 供 `LogMiddleware` 读取——不改返回值、不污染 `AIMessage`（见 [10 §10.2](10-evaluation.md)）。
 
 ### 为什么用 SDK 的 function calling，而非手写文本解析
 

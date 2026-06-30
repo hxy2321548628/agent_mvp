@@ -37,7 +37,7 @@ graph TD
 
     subgraph MW["middleware/ 横切关注点（可插拔）"]
         prefix["SessionPrefix 系统提示+提醒"]
-        log["Log 落盘审计"]
+        log["Log 结构化运行日志"]
         trace["Trace stdout 调试"]
         maxturn["MaxTurn 轮次保护"]
         context["Context 上下文压缩"]

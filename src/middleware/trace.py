@@ -1,6 +1,6 @@
 """追踪中间件 trace.py：在模型/工具阶段把结构化执行日志输出到注入的 sink（顺序钩子）。
 
-事件正文由 event.py 统一格式化（与 LogMiddleware 共用）；本中间件只加 thread/step 前缀并落 sink。
+事件正文由 event.py 统一格式化；本中间件只加 thread/step 前缀并落 sink。
 """
 
 from collections.abc import Callable

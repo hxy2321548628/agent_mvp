@@ -7,7 +7,7 @@
 from pathlib import Path
 
 from eval.case import load_cases
-from eval.config import EVAL_CASE_DIR, EVAL_ONLINE_BASELINE, EVAL_PARALLEL, EVAL_TRACE_DIR
+from eval.config import EVAL_CASE_DIR, EVAL_ONLINE_BASELINE, EVAL_PARALLEL
 from eval.report import render
 from eval.runner import run_online
 from src.config import Settings
@@ -22,7 +22,7 @@ def main() -> int:
         return 0
     client = DeepSeekClient.from_credentials(settings.DEEPSEEK_API_KEY, settings.DEEPSEEK_BASE_URL, settings.DEEPSEEK_MODEL, settings.DEEPSEEK_PROXY)
     report, regressions = run_online(
-        load_cases(Path(EVAL_CASE_DIR)), client, Path(EVAL_TRACE_DIR), settings.DEEPSEEK_MODEL, Path(EVAL_ONLINE_BASELINE), parallel=EVAL_PARALLEL
+        load_cases(Path(EVAL_CASE_DIR)), client, settings.DEEPSEEK_MODEL, Path(EVAL_ONLINE_BASELINE), parallel=EVAL_PARALLEL
     )
     print(render(report))
     for line in regressions:

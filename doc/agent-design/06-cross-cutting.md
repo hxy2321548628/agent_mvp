@@ -44,24 +44,20 @@ def wrap_tool_call(self, ctx, handler):
 
 > **依赖倒置在这里尤其关键**：`requires_approval` 查询（= `ToolRegistry.requires_approval`）与 `confirm` 征询回调**都由组合根注入**，`src/` 不做终端 I/O。离线测试注入「恒真/恒假」的 fake confirm 即可验证放行/拦截两条路径。CLI 侧的 `confirm` 在 P11 是基本 y/N，P13 升级为彩色「允许/拒绝/总是允许」——而 `ApprovalMiddleware` **一行没改**（见 [08](08-extension-guide.md) 与 [DDD §20](../ddd/02ddd.md)）。
 
-## 6.4 Trace vs Log：两种可观测，一份格式化
+## 6.4 Trace vs Log：人读调试 vs 机读运行日志
 
-调试看输出、审计留档案，是两种不同需求，于是拆成两个中间件，但**共用事件格式化**：
+「调试时看输出」与「事后机器可读地复盘 / 评测」是两种不同需求，于是两个中间件分工：
 
 | | TraceMiddleware | LogMiddleware |
 |---|---|---|
-| 落点 | stdout | `log/` 文件（每会话一个） |
-| 开关 | 可开关（`:trace`，默认关） | 常开 |
-| 用途 | 调试 | 审计 |
+| 受众 | 人（调试） | 机器（评测 / 成本分析） |
+| 落点 | stdout | `log/` 文件（每会话一份 JSONL） |
+| 开关 | 可开关（`:trace`，默认关） | 常开累积，仅 `persist` 决定是否落盘 |
+| 结构 | 文本行 | 严格结构化、可回读为对象 |
 | 文件 | [trace.py](../../src/middleware/trace.py) | [log.py](../../src/middleware/log.py) |
 
-两者都订 `after_model`/`before_tool`/`after_tool`，事件正文由 [event.py](../../src/util/event.py) 统一格式化（`format_model_event` / `format_tool_call_event` / `format_tool_result_event`）——**避免两份重复的格式化代码**。各自只负责加前缀（trace 加 `[trace thread=… step=…]`）和决定落点。
-
-> Trace 的 sink 是注入的：组合根传入一个「仅当 `trace_on` 打开才打印」的闭包（`make_trace_sink`），于是 `:trace` 命令翻转 `Toggles.trace_on` 就能即时生效——开关状态由 REPL 与 sink **共享**一个 `Toggles` 对象。
-
-Log 的文件名 = `created_at` + 清洗截断的首句用户提问，按 `thread_id` 缓存以保持稳定（[log.py `_filename`](../../src/middleware/log.py#L59)）。
-
-> 三期又加了**第三种**可观测：机读的 `Observe`——把每次 run 落成**结构化 JSONL**（token / 成本 / cache 命中），专供评测打分与成本分析。Trace/Log 给人看、Observe 给机器看，分工与用途见 [10 §10.2](10-evaluation.md)。
+- **Trace**：订 `after_model`/`before_tool`/`after_tool`，事件正文由 [event.py](../../src/util/event.py) 格式化成人读文本（`format_model_event` 等），自己加 `[trace thread=… step=…]` 前缀。sink 是注入的：组合根传入「仅当 `trace_on` 打开才打印」的闭包（`make_trace_sink`），`:trace` 翻转 `Toggles.trace_on` 即时生效——开关状态由 REPL 与 sink **共享**一个 `Toggles` 对象。
+- **Log**：逐生命周期把 `user`/`model`/`tool_result` 收成 `RunEvent` 累积进 `ctx.run_log`（一次 run 一份 `RunLog`），`persist` 时按 session **追加**落 `log/<created_at>-<首句>.jsonl`。这份**机读运行日志**既是评测算指标的内存数据源，也可被 `read_session_log` 回读、由 loader 离线造 case（见 [10 §10.2](10-evaluation.md)）。文件名 = `created_at` + 清洗截断的首句，按 `thread_id` 缓存以保持稳定（[log.py `_filename`](../../src/middleware/log.py)）。
 
 ## 6.5 Retry：infra 错误的退避重试
 
@@ -108,7 +104,7 @@ graph LR
 | 上下文压缩 | Context | `before_model` 破坏性摘要 |
 | 人工授权 | Approval | `wrap_tool_call` 拦截，依赖注入 confirm |
 | 调试日志 | Trace | 顺序钩子 → 可开关 stdout sink |
-| 审计日志 | Log | 顺序钩子 → 每会话文件 |
+| 结构化运行日志 | Log | 顺序钩子 → 累积 `ctx.run_log`，`persist` 落每会话 JSONL |
 | 失败重试 | Retry | 环绕钩子 + 流式提交边界 |
 | 分通道展示 | on_event + render | runtime 桥接事件 + CLI 渲染 |
 

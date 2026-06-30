@@ -10,7 +10,7 @@
 
 每个类/函数/模块只有一个变化的理由。违反信号：函数超 50 行、一个类有 3+ 个不相关方法、改一个功能要动多个不相关文件。
 
-证据遍布全项目：runtime 只管主干、每个中间件一个关注点、`SessionManager` 是持久化的唯一负责方、`event.py` 把格式化从 trace/log 里抽出来共用。
+证据遍布全项目：runtime 只管主干、每个中间件一个关注点、`SessionManager` 是持久化的唯一负责方、`event.py` 把 Trace 的执行日志格式化单独抽出。
 
 > 但 S **不等于拆到最碎**：[06 §6.1](06-cross-cutting.md) 里 SystemPrompt 与 Memory 合并成一个 SessionPrefix，因为它们同钩子同职责。「单一职责」看的是「变化的理由」，不是行数。
 

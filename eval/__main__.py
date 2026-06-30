@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from eval.config import EVAL_BASELINE, EVAL_CASE_DIR, EVAL_CASSETTE_DIR, EVAL_TRACE_DIR
+from eval.config import EVAL_BASELINE, EVAL_CASE_DIR, EVAL_CASSETTE_DIR
 from eval.report import render
 from eval.runner import run_eval
 from src.config import DEFAULT_MODEL
@@ -13,7 +13,6 @@ def main() -> int:
     report, regressions = run_eval(
         Path(EVAL_CASE_DIR),
         Path(EVAL_CASSETTE_DIR),
-        Path(EVAL_TRACE_DIR),
         Path(EVAL_BASELINE),
         DEFAULT_MODEL,
     )

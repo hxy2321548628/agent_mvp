@@ -38,33 +38,60 @@ class AgentState(BaseModel):
     messages: list[Message] = Field(default_factory=list)
 
 
-class TurnRecord(BaseModel):
-    """一轮 model-call 的机读记录：模型决策（选了哪些工具）、时延、token 计量。
+RunEventKind = Literal["user", "model", "tool_result"]  # 运行事件三类
 
-    tool_results 为该轮工具是否出错（after_tool 逐个追加），供评测看工具成败。
+
+class RunEvent(BaseModel):
+    """一条运行事件（机读、含正文）：按 kind 取相应字段，run 边界由 user 事件划定。
+
+    user：content 为用户提问；model：模型决策（content/reasoning/tool_calls）+ 时延 + usage；
+    tool_result：工具执行（tool/is_error/content）。逐条足以回放整段对话并派生摘要。
     """
 
+    kind: RunEventKind
     step: int
-    model: str
-    tool_calls: list[str] = Field(default_factory=list)
-    tool_results: list[bool] = Field(default_factory=list)
+    content: str = ""
+    reasoning_content: str = ""
+    tool_calls: list[ToolCall] = Field(default_factory=list)
+    model_name: str = ""
     latency_ms: int = 0
     usage: Usage = Field(default_factory=Usage)
+    tool: str = ""
+    is_error: bool = False
 
 
-class RunTrace(BaseModel):
-    """一次 run 的结构化轨迹：逐轮 TurnRecord 累积，并能按价目表估算总成本。"""
+class RunLog(BaseModel):
+    """一次 run 的完整事件日志：单一事实源，工具序列/轮数/时延/成本均按需派生。"""
 
     run_id: str
     thread_id: str
-    turns: list[TurnRecord] = Field(default_factory=list)
+    events: list[RunEvent] = Field(default_factory=list)
+
+    @property
+    def model_events(self) -> list[RunEvent]:
+        """本 run 的全部 model 事件（一轮 model-call 一条）。"""
+        return [event for event in self.events if event.kind == "model"]
+
+    @property
+    def turns(self) -> int:
+        """模型轮数 = model 事件数。"""
+        return len(self.model_events)
+
+    def tool_calls(self) -> list[str]:
+        """展平各 model 事件的工具名（按调用先后保序）。"""
+        return [tc.name for event in self.model_events for tc in event.tool_calls]
+
+    @property
+    def latency_ms(self) -> int:
+        """总时延 = Σ 各 model 事件时延。"""
+        return sum(event.latency_ms for event in self.model_events)
 
     def cost(self, price: dict[str, dict[str, float]]) -> float:
         """按 price（model → {input,output} 每百万 token 单价）估算总成本。"""
         total = 0.0
-        for turn in self.turns:
-            tier = price.get(turn.model, {})
-            total += (turn.usage.prompt_tokens * tier.get("input", 0.0) + turn.usage.completion_tokens * tier.get("output", 0.0)) / 1_000_000
+        for event in self.model_events:
+            tier = price.get(event.model_name, {})
+            total += (event.usage.prompt_tokens * tier.get("input", 0.0) + event.usage.completion_tokens * tier.get("output", 0.0)) / 1_000_000
         return total
 
 
@@ -87,5 +114,5 @@ class RunContext:
     current_tool_call: ToolCall | None = None  # 供 [工具调用前] 读取
     current_tool_result: ToolMessage | None = None  # 供 [工具调用后] 读取
     run_id: str = field(default_factory=lambda: uuid4().hex[:12])  # 本次 run 唯一标识（trace 文件名）
-    last_usage: Usage | None = None  # 最近一次 llm.chat 的 token 计量（on_usage 回调挂入，ObserveMiddleware 读）
-    trace: RunTrace | None = None  # 本次 run 的结构化轨迹（ObserveMiddleware 逐轮填充）
+    last_usage: Usage | None = None  # 最近一次 llm.chat 的 token 计量（on_usage 回调挂入，LogMiddleware 读）
+    run_log: RunLog | None = None  # 本次 run 的结构化运行日志（LogMiddleware 逐事件填充）

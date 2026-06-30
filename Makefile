@@ -2,7 +2,9 @@
 # 用法：make <目标>；直接 make 显示帮助。
 
 .DEFAULT_GOAL := help
-.PHONY: help install run-cli test eval eval-online eval-live format check clean
+.PHONY: help install run-cli test eval eval-case eval-online eval-live format check clean
+
+LOG ?= log  # eval-case 的输入：会话日志文件或目录（默认整个 log/）
 
 help:  ## 显示所有可用目标
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-12s\033[0m %s\n", $$1, $$2}'
@@ -18,6 +20,9 @@ test:  ## 运行测试（带覆盖率报告）
 
 eval:  ## 离线回放打分评测（确定性，CI 闸门用，无需 API）
 	uv run python -m eval
+
+eval-case:  ## 从运行日志离线生成评测用例（case+cassette，场景按日期）；LOG=<path> 指定，默认整个 log/
+	uv run python -m eval.loader $(LOG)
 
 eval-online:  ## 在线真实 API 打分评测（跑 case + 软指标 + 比在线基线；需 DEEPSEEK_API_KEY）
 	uv run python -m eval.online

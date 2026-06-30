@@ -40,7 +40,6 @@ def _names(log: bool, trace_sink, context: bool, record_control=None) -> list[st
         todo_store=TodoStore(),
         settings=Settings(),
         confirm=lambda _call: True,
-        trace_dir="trace",
         model="m",
         log=log,
         trace_sink=trace_sink,
@@ -51,10 +50,9 @@ def _names(log: bool, trace_sink, context: bool, record_control=None) -> list[st
 
 
 def test_cli_profile_full_stack_in_order() -> None:
-    """cli 形态（log+trace+context 全开）：栈含全部 8 个中间件且顺序固定。"""
+    """cli 形态（log 落盘 + trace + context 全开）：栈含全部 7 个中间件且顺序固定。"""
     assert _names(log=True, trace_sink=lambda _s: None, context=True) == [
         "SessionPrefixMiddleware",
-        "ObserveMiddleware",
         "LogMiddleware",
         "TraceMiddleware",
         "MaxTurnMiddleware",
@@ -65,17 +63,17 @@ def test_cli_profile_full_stack_in_order() -> None:
 
 
 def test_eval_profile_drops_io_and_context_keeps_core_order() -> None:
-    """eval 形态（关 log/trace/context，无录制）：去掉纯 I/O 与压缩，行为核心保序。"""
+    """eval 形态（log 不落盘、关 trace/context，无录制）：去掉纯 I/O 与压缩，Log 仍在以累积 run_log，行为核心保序。"""
     assert _names(log=False, trace_sink=None, context=False) == [
         "SessionPrefixMiddleware",
-        "ObserveMiddleware",
+        "LogMiddleware",
         "MaxTurnMiddleware",
         "ApprovalMiddleware",
         "RetryMiddleware",
     ]
 
 
-def test_record_control_mounts_record_middleware_after_observe() -> None:
-    """给了 record_control：RecordMiddleware 紧随 Observe 挂入（默认不给则不挂）。"""
+def test_record_control_mounts_record_middleware_after_log() -> None:
+    """给了 record_control：RecordMiddleware 紧随 Log 挂入（默认不给则不挂）。"""
     names = _names(log=False, trace_sink=None, context=False, record_control=RecordControl())
-    assert names[:3] == ["SessionPrefixMiddleware", "ObserveMiddleware", "RecordMiddleware"]
+    assert names[:3] == ["SessionPrefixMiddleware", "LogMiddleware", "RecordMiddleware"]

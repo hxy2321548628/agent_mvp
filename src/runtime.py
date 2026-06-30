@@ -22,7 +22,13 @@ FALLBACK_TEXT = "已达到最大轮次限制，已停止处理。"
 class AgentRuntime:
     """智能体运行时：编排 ReAct 主循环并触发生命周期钩子。"""
 
-    def __init__(self, llm: LLMClient, registry: ToolRegistry, middlewares: list[Middleware], settings: Settings) -> None:
+    def __init__(
+        self,
+        llm: LLMClient,
+        registry: ToolRegistry,
+        middlewares: list[Middleware],
+        settings: Settings,
+    ) -> None:
         self._llm = llm
         self._registry = registry
         self._middlewares = middlewares
@@ -52,11 +58,17 @@ class AgentRuntime:
             self._fire("before_tool", ctx)
             try:
                 result = self._tool_chain(ctx)
-            except ToolInfraError as exc:  # 重试耗尽 → 兜底成 is_error 回灌，不中断 loop
-                result = ToolMessage(content=str(exc), tool_call_id=call.id, is_error=True)
+            except (
+                ToolInfraError
+            ) as exc:  # 重试耗尽 → 兜底成 is_error 回灌，不中断 loop
+                result = ToolMessage(
+                    content=str(exc), tool_call_id=call.id, is_error=True
+                )
             ctx.state.messages.append(result)
             ctx.current_tool_result = result
-            if ctx.on_event is not None:  # 工具返回作为「tool_result」通道喂给 CLI 分区渲染
+            if (
+                ctx.on_event is not None
+            ):  # 工具返回作为「tool_result」通道喂给 CLI 分区渲染
                 ctx.on_event(Event(kind="tool_result", text=result.content))
             self._fire("after_tool", ctx)
 
@@ -70,24 +82,37 @@ class AgentRuntime:
 
         def base(c: RunContext) -> AIMessage:
             on_token, on_reasoning = self._stream_sinks(c)
-            return self._llm.chat(c.state.messages, c.tools_schema, on_token, on_reasoning, c.reasoning, self._usage_sink(c))
+            return self._llm.chat(
+                c.state.messages,
+                c.tools_schema,
+                on_token,
+                on_reasoning,
+                c.reasoning,
+                self._usage_sink(c),
+            )
 
         handler: ModelHandler = base
+        # 注意这里是从后向前包裹，调用是从前往后调用
         for mw in reversed(self._middlewares):
             handler = self._wrap_model(mw, handler)
         return handler(ctx)
 
     @staticmethod
-    def _stream_sinks(ctx: RunContext) -> tuple[Callable[[str], None] | None, Callable[[str], None] | None]:
+    def _stream_sinks(
+        ctx: RunContext,
+    ) -> tuple[Callable[[str], None] | None, Callable[[str], None] | None]:
         """决定答案/思考两路流式 sink：有 on_event 则桥接成 answer/reasoning 事件，否则回退 on_token（兼容）。"""
         if ctx.on_event is not None:
             on_event = ctx.on_event
-            return (lambda t: on_event(Event(kind="answer", text=t)), lambda t: on_event(Event(kind="reasoning", text=t)))
+            return (
+                lambda t: on_event(Event(kind="answer", text=t)),
+                lambda t: on_event(Event(kind="reasoning", text=t)),
+            )
         return ctx.on_token, None
 
     @staticmethod
     def _usage_sink(ctx: RunContext) -> Callable[[Usage], None]:
-        """造一个把本轮 token 计量挂到 ctx.last_usage 的回调（供 ObserveMiddleware 读取）。"""
+        """造一个把本轮 token 计量挂到 ctx.last_usage 的回调（供 LogMiddleware 读取）。"""
 
         def sink(usage: Usage) -> None:
             ctx.last_usage = usage

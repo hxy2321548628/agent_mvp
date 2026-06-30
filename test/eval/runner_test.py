@@ -31,7 +31,7 @@ def test_run_case_passes_calculator(tmp_path: Path) -> None:
         ],
     )
     case = Case(scenario="calc", name="c", input="算 12*8", expect=Expect(tool_sequence=["calculator"], answer_contains="96", max_turns=3))
-    result = run_case(case, cassette_dir, default_registry(), tmp_path / "trace", DEFAULT_MODEL)
+    result = run_case(case, cassette_dir, default_registry(), DEFAULT_MODEL)
     assert result.passed and result.failures == []
     assert result.scenario == "calc"
     assert result.tool_sequence == ["calculator"] and result.tool_match is True
@@ -44,7 +44,7 @@ def test_run_case_fails_on_answer_mismatch(tmp_path: Path) -> None:
     cassette_dir.mkdir()
     _write_cassette(cassette_dir / "greeting.jsonl", "g", [{"content": "你好"}])
     case = Case(scenario="greeting", name="g", input="hi", expect=Expect(answer_contains="再见"))
-    result = run_case(case, cassette_dir, default_registry(), tmp_path / "trace", "m")
+    result = run_case(case, cassette_dir, default_registry(), "m")
     assert not result.passed
     assert any("答案未包含" in failure for failure in result.failures)
 
@@ -74,7 +74,7 @@ def test_run_eval_returns_report_without_regression(tmp_path: Path) -> None:
     (case_dir / "greeting.jsonl").write_text(json.dumps({"name": "g", "input": "hi", "expect": {"answer_contains": "你好"}}) + "\n", encoding="utf-8")
     baseline = tmp_path / "baseline.json"
     baseline.write_text(json.dumps({"task_success_rate": 1.0, "tool_accuracy": 1.0}), encoding="utf-8")
-    report, regressions = run_eval(case_dir, cassette_dir, tmp_path / "trace", baseline, "m")
+    report, regressions = run_eval(case_dir, cassette_dir, baseline, "m")
     assert isinstance(report, Report) and regressions == []
     assert report.metrics()["task_success_rate"] == 1.0
 
@@ -88,6 +88,6 @@ def test_run_suite_parallel_preserves_order(tmp_path: Path) -> None:
         "".join(json.dumps({"name": name, "turns": [{"content": "ok"}]}) + "\n" for name in names), encoding="utf-8"
     )
     cases = [Case(scenario="s", name=name, input="hi", expect=Expect(answer_contains="ok")) for name in names]
-    report = run_suite(cases, _replay_factory(cassette_dir), tmp_path / "trace", "m", parallel=2)
+    report = run_suite(cases, _replay_factory(cassette_dir), "m", parallel=2)
     assert [result.name for result in report.results] == names
     assert report.metrics()["task_success_rate"] == 1.0

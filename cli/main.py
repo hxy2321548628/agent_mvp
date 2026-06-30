@@ -2,13 +2,13 @@
 
 命令解析见 command.py（纯函数）；交互与窗口管理见 repl.py（Repl + Toggles）。
 本文件只做「构造具体依赖 → 注入 → 启动」这一件事，与 CLI 交互 UI 解耦。
-中间件顺序：SessionPrefix → Observe →[Record]→ Log → Trace → MaxTurn → Context → Approval → Retry。
+中间件顺序：SessionPrefix → Log →[Record]→ Trace → MaxTurn → Context → Approval → Retry。
 """
 
 from cli.repl import Repl, Toggles, ToolApproval, make_trace_sink
 from eval.config import EVAL_CASE_DIR, EVAL_CASSETTE_DIR
 from src.agent import Agent
-from src.config import STREAM, TRACE_DIR, Settings
+from src.config import STREAM, Settings
 from src.llm.deepseek_client import DeepSeekClient
 from src.middleware.record import RecordControl
 from src.runtime import AgentRuntime
@@ -54,7 +54,6 @@ def build_agent(settings: Settings, toggles: Toggles, record: RecordControl) -> 
         todo_store=todo_store,
         settings=settings,
         confirm=ToolApproval(),
-        trace_dir=TRACE_DIR,
         model=settings.DEEPSEEK_MODEL,
         log=True,
         trace_sink=make_trace_sink(toggles),

@@ -88,9 +88,9 @@ class AuditMiddleware(Middleware):
 ```python
 middlewares = [
     SessionPrefixMiddleware(...),
-    ObserveMiddleware(...),
+    LogMiddleware(...),
     AuditMiddleware(sink=compliance_sink),   # ← 放在工具相关中间件之前
-    LogMiddleware(...), TraceMiddleware(...),
+    TraceMiddleware(...),
     MaxTurnMiddleware(...), ContextMiddleware(...),
     ApprovalMiddleware(...), RetryMiddleware(...),
 ]
@@ -118,7 +118,7 @@ class MyLLMClient:
         # 2. 调你家 API；流式则把增量喂 on_token / on_reasoning
         # 3. 把返回映射回内部 AIMessage（content / reasoning_content / tool_calls）
         # 4. 连接期失败翻译成 LLMInfraError；空响应抛 EmptyLLMResponseError
-        # 5. on_usage 非空则回调本次 token 计量（供 Observe 估算成本，见 10）
+        # 5. on_usage 非空则回调本次 token 计量（供 Log 估算成本，见 10）
         ...
 ```
 

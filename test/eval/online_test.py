@@ -35,7 +35,7 @@ def test_run_online_scores_with_injected_llm(tmp_path: Path) -> None:
         Case(scenario="s", name="a", input="hi", expect=Expect(answer_contains="96")),
         Case(scenario="s", name="b", input="hi", expect=Expect(answer_contains="你好")),
     ]
-    report, regressions = run_online(cases, _FakeLLM(), tmp_path / "trace", "m", tmp_path / "missing.json", parallel=2)
+    report, regressions = run_online(cases, _FakeLLM(), "m", tmp_path / "missing.json", parallel=2)
     assert report.metrics()["task_success_rate"] == 1.0
     assert regressions == []
 
@@ -51,13 +51,13 @@ def test_online_main_skips_without_api_key(monkeypatch: pytest.MonkeyPatch) -> N
 
 
 @pytest.mark.slow
-def test_online_eval_real_api_runs(tmp_path: Path) -> None:
+def test_online_eval_real_api_runs() -> None:
     """@slow：真实 DeepSeek 跑一条简单用例，验证在线打分管线端到端通（需 KEY，默认跳过）。"""
     settings = Settings()
     if not settings.DEEPSEEK_API_KEY:
         pytest.skip("需要真实 DEEPSEEK_API_KEY")
     client = DeepSeekClient.from_credentials(settings.DEEPSEEK_API_KEY, settings.DEEPSEEK_BASE_URL, settings.DEEPSEEK_MODEL, settings.DEEPSEEK_PROXY)
     case = Case(scenario="calc", name="calc", input="只回答数字：12*8 等于多少？", expect=Expect(answer_contains="96"))
-    result = evaluate(case, client, default_registry(), tmp_path / "trace", settings.DEEPSEEK_MODEL)
+    result = evaluate(case, client, default_registry(), settings.DEEPSEEK_MODEL)
     assert result.turns >= 1
     assert isinstance(result.passed, bool)

@@ -16,9 +16,8 @@ BACKOFF = 0.5  # 退避基数秒，第 n 次重试等待 BACKOFF·2^(n-1)（Retr
 STREAM = True  # 是否默认开启流式输出（on_token 实时回调）
 BASH_TIMEOUT = 30  # bash 工具单条命令执行超时秒数
 FETCH_TIMEOUT = 15  # fetch 工具 HTTP 请求超时秒数
-LOG_DIR = "log"  # 日志根目录（每会话一个文件，LogMiddleware 落盘）
+LOG_DIR = "log"  # 结构化运行日志根目录（每会话一份机读 JSONL，LogMiddleware 落盘）
 LOG_NAME_MAXLEN = 20  # 日志文件名里首句截断的最大字符数
-TRACE_DIR = "trace"  # 结构化机读轨迹根目录（ObserveMiddleware 每会话/run 一份 JSONL）
 MODEL_PRICE = {DEFAULT_MODEL: {"input": 0.14, "output": 0.28}}  # 每百万 token 美元单价（成本估算，占位值可调）
 # bash 命令命中以下任一正则即需 HITL 授权（破坏/重定向/提权/远端推送等，ApprovalMiddleware 用）
 DANGER_PATTERN = [

@@ -16,7 +16,7 @@ from src.config import MODEL_PRICE, Settings
 from src.llm.base import LLMClient
 from src.runtime import AgentRuntime
 from src.schema.message import HumanMessage
-from src.schema.state import AgentState, RunContext, RunTrace
+from src.schema.state import AgentState, RunContext, RunLog
 from src.tool.calculator import CalculatorTool
 from src.tool.registry import ToolRegistry
 from src.tool.todo import TodoStore, TodoTool
@@ -46,8 +46,8 @@ def _check(expect: Expect, tools: list[str], answer: str, turns: int) -> list[st
     return failures
 
 
-def evaluate(case: Case, llm: LLMClient, registry: ToolRegistry, trace_dir: Path, model: str) -> CaseResult:
-    """跑单条用例：注入的 LLM（回放 / 真实）+ 真实工具，收 RunTrace，评断言、算指标。"""
+def evaluate(case: Case, llm: LLMClient, registry: ToolRegistry, model: str) -> CaseResult:
+    """跑单条用例：注入的 LLM（回放 / 真实）+ 真实工具，收 RunLog，评断言、算指标。"""
     thread_id = f"{case.scenario}/{case.name}" if case.scenario else case.name
     state = AgentState(thread_id=thread_id)
     state.messages.append(HumanMessage(content=case.input))
@@ -59,16 +59,15 @@ def evaluate(case: Case, llm: LLMClient, registry: ToolRegistry, trace_dir: Path
         todo_store=TodoStore(),
         settings=settings,
         confirm=lambda _call: True,
-        trace_dir=str(trace_dir),
         model=model,
         log=False,
         trace_sink=None,
         context=False,
     )
     answer = AgentRuntime(llm=llm, registry=registry, middlewares=middlewares, settings=settings).run(ctx)
-    trace = ctx.trace or RunTrace(run_id=ctx.run_id, thread_id=thread_id)
-    tools = [name for turn in trace.turns for name in turn.tool_calls]
-    failures = _check(case.expect, tools, answer, len(trace.turns))
+    run_log = ctx.run_log or RunLog(run_id=ctx.run_id, thread_id=thread_id)
+    tools = run_log.tool_calls()
+    failures = _check(case.expect, tools, answer, run_log.turns)
     tool_match = (tools == case.expect.tool_sequence) if case.expect.tool_sequence is not None else None
     return CaseResult(
         scenario=case.scenario,
@@ -77,22 +76,21 @@ def evaluate(case: Case, llm: LLMClient, registry: ToolRegistry, trace_dir: Path
         failures=failures,
         tool_sequence=tools,
         tool_match=tool_match,
-        turns=len(trace.turns),
-        cost=trace.cost(MODEL_PRICE),
-        latency_ms=sum(turn.latency_ms for turn in trace.turns),
+        turns=run_log.turns,
+        cost=run_log.cost(MODEL_PRICE),
+        latency_ms=run_log.latency_ms,
     )
 
 
-def run_case(case: Case, cassette_dir: Path, registry: ToolRegistry, trace_dir: Path, model: str) -> CaseResult:
+def run_case(case: Case, cassette_dir: Path, registry: ToolRegistry, model: str) -> CaseResult:
     """录制回放单条用例（确定性）：从场景 cassette 按 name 取录制建 ReplayLLMClient 后委托 evaluate。"""
     responses, usages = load_cassette(cassette_dir / f"{case.scenario}.jsonl")[case.name]
-    return evaluate(case, ReplayLLMClient(responses, usages), registry, trace_dir, model)
+    return evaluate(case, ReplayLLMClient(responses, usages), registry, model)
 
 
 def run_suite(
     cases: list[Case],
     llm_factory: Callable[[Case], LLMClient],
-    trace_dir: Path,
     model: str,
     registry_factory: Callable[[], ToolRegistry] = default_registry,
     parallel: int = 1,
@@ -106,7 +104,7 @@ def run_suite(
 
     def work(job: tuple[Case, LLMClient]) -> CaseResult:
         case, llm = job
-        return evaluate(case, llm, registry_factory(), trace_dir, model)
+        return evaluate(case, llm, registry_factory(), model)
 
     if parallel <= 1:
         results = [work(job) for job in jobs]
@@ -129,15 +127,15 @@ def _replay_factory(cassette_dir: Path) -> Callable[[Case], LLMClient]:
     return make
 
 
-def run_eval(case_dir: Path, cassette_dir: Path, trace_dir: Path, baseline_path: Path, model: str) -> tuple[Report, list[str]]:
+def run_eval(case_dir: Path, cassette_dir: Path, baseline_path: Path, model: str) -> tuple[Report, list[str]]:
     """录制回放全链路：加载 → 回放跑（确定性，串行）→ 与基线 diff，返回 (报告, 回归列表)。"""
-    report = run_suite(load_cases(case_dir), _replay_factory(cassette_dir), trace_dir, model)
+    report = run_suite(load_cases(case_dir), _replay_factory(cassette_dir), model)
     regressions = diff_baseline(report.metrics(), load_baseline(baseline_path))
     return report, regressions
 
 
-def run_online(cases: list[Case], llm: LLMClient, trace_dir: Path, model: str, baseline_path: Path, parallel: int = 1) -> tuple[Report, list[str]]:
+def run_online(cases: list[Case], llm: LLMClient, model: str, baseline_path: Path, parallel: int = 1) -> tuple[Report, list[str]]:
     """在线打分全链路：用同一真实 LLM 并发跑全部用例 → 与在线基线 diff，返回 (报告, 回归列表)。"""
-    report = run_suite(cases, lambda _case: llm, trace_dir, model, parallel=parallel)
+    report = run_suite(cases, lambda _case: llm, model, parallel=parallel)
     regressions = diff_baseline(report.metrics(), load_baseline(baseline_path))
     return report, regressions

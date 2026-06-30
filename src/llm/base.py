@@ -24,7 +24,7 @@ class EmptyLLMResponseError(LLMInfraError):
 
 
 class Usage(BaseModel):
-    """一次 LLM 调用的 token 计量，供可观测（ObserveMiddleware）与成本估算。
+    """一次 LLM 调用的 token 计量，供可观测（LogMiddleware）与成本估算。
 
     含 DeepSeek 前缀缓存命中/未命中（自动缓存的命中率即从此观测，见 DDD3 §25/§30）。
     不并入 AIMessage：那是对话内容，计量另走 on_usage 回调挂到 RunContext，互不污染。
@@ -44,7 +44,7 @@ class LLMClient(Protocol):
     on_token 非空时逐 token 回调 content 增量（流式），但仍返回完整 AIMessage；
     reasoning 为真时开启 thinking 模式，思考增量另经 on_reasoning 回调（与答案分流）；
     on_usage 非空时把本次调用的 token 计量回调出去（与 on_token 同风格、不改返回值），
-    由运行时挂到 RunContext.last_usage 供 ObserveMiddleware 读取（见 DDD3 §25）。
+    由运行时挂到 RunContext.last_usage 供 LogMiddleware 读取（见 DDD3 §25）。
     """
 
     def chat(

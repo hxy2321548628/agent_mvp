@@ -18,21 +18,20 @@ graph LR
 
 解法是**两层分治**：确定性骨架用**录制回放**（进 CI、零成本零 flaky），真实波动用少量**在线打分**（看模型效果真实变化）。下面从地基讲起。
 
-## 10.2 地基：把一次 run 变成机读轨迹（Observe）
+## 10.2 地基：把一次 run 变成机读运行日志（Log）
 
-[06 §6.4](06-cross-cutting.md) 已有两种可观测：`Trace`（人调试、stdout、可关）与 `Log`（人审计、文件、常开）。评测需要**第三种**——机器读的：
+[06 §6.4](06-cross-cutting.md) 的两种可观测分工是「人读调试」与「机读复盘」：
 
 | | 受众 | 介质 | 结构 |
 |---|---|---|---|
 | Trace | 人调试 | stdout | 文本行 |
-| Log | 人审计 | `log/*.log` | 半结构化 |
-| **Observe** | **机器 / 评测** | **`trace/*.jsonl`** | **严格结构化、可回读为对象** |
+| **Log** | **机器 / 评测** | **`log/*.jsonl`** | **严格结构化、可回读为对象** |
 
-[ObserveMiddleware](../../src/middleware/observe.py) 订生命周期钩子，把每轮 model-call 收成一条 `TurnRecord`（选了哪些工具、各工具是否出错、时延、`usage`），整个 run 汇成 `RunTrace` 落 `trace/<thread_id>/<run_id>.jsonl`，可被 `read_trace` 回读为对象。`usage` 含 DeepSeek 的 `prompt_cache_hit/miss_tokens`，乘单价即估算成本。
+[LogMiddleware](../../src/middleware/log.py) 订生命周期钩子，逐条把 `user`/`model`/`tool_result` 收成 `RunEvent`（正文 + 选了哪些工具、是否出错、时延、`usage`），一次 run 汇成 `RunLog` 累积进 `ctx.run_log`；`persist` 时按 session 追加落 `log/<created_at>-<首句>.jsonl`，可被 `read_session_log` 按 `user` 事件切分回读为多个 `RunLog`。工具序列/轮数/时延/成本都从事件**派生**（`usage` 含 DeepSeek 的 `prompt_cache_hit/miss_tokens`，乘单价即估算成本）。
 
-> **一个不污染的设计**：`usage` 不塞进持久的 `AIMessage`（那是对话内容，不该混入计量）。`LLMClient.chat` 新增 `on_usage` 回调（与 `on_token`/`on_reasoning` 同风格），运行时把它挂到瞬态 `RunContext.last_usage` 供 Observe 读取——对既有调用与一众测试 fake **零破坏**。细节见 [DDD §25](../ddd/03ddd.md)。
+> **一个不污染的设计**：`usage` 不塞进持久的 `AIMessage`（那是对话内容，不该混入计量）。`LLMClient.chat` 的 `on_usage` 回调（与 `on_token`/`on_reasoning` 同风格）把本次计量回调出去，运行时挂到瞬态 `RunContext.last_usage` 供 Log 读取——对既有调用与一众测试 fake **零破坏**。细节见 [DDD §25](../ddd/03ddd.md)。
 
-这条机读轨迹是后面一切的**数据源**：评测要打分靠它、成本/缓存分析靠它、未来分级路由看成本也靠它。所以它排在评测之前先做。
+这份机读运行日志是后面一切的**数据源**：评测打分靠它（运行期直接读内存 `ctx.run_log`，**不读 log 文件**）、成本/缓存分析靠它、未来分级路由看成本也靠它。
 
 ## 10.3 两层分治：录制回放守骨架，在线打分看效果
 
@@ -41,9 +40,9 @@ flowchart LR
     case["case &lt;场景&gt;.jsonl<br/>输入 + 期望断言"] --> runner
     cass["cassette &lt;场景&gt;.jsonl<br/>录制的真实响应"] --> replay["ReplayLLMClient"]
     replay -->|注入 LLM| runner["evaluate: 跑真实 ReAct"]
-    runner --> trace["§10.2 RunTrace"]
-    trace --> chk["断言: 工具序列/含某工具/轮数/答案"]
-    trace --> met["指标: 工具准确率/成功率/轮数/成本/时延"]
+    runner --> rl["§10.2 RunLog"]
+    rl --> chk["断言: 工具序列/含某工具/轮数/答案"]
+    rl --> met["指标: 工具准确率/成功率/轮数/成本/时延"]
     met --> rep["report + 基线 diff"] --> ci{"CI 闸门"}
 ```
 
@@ -66,7 +65,7 @@ flowchart TD
     f -->|"自动放行 · 关 I/O · 确定性工具"| ev[eval]
 ```
 
-> 「一致」**不是「完全相同」**：Log/Trace 是纯 I/O、Approval 在评测要自动放行、工具只能用确定性的（无 bash/网络副作用）——这些**必须不同**。要消灭的是**隐性漂移**：新增一个行为中间件只落工厂一处，评测**自动跟上**。细节见 [DDD §34.2](../ddd/03ddd.md)。
+> 「一致」**不是「完全相同」**：Trace 是纯 I/O（评测关）、Log 的内存累积常开（评测靠 `ctx.run_log` 算指标）只关其落盘、Approval 在评测要自动放行、工具只能用确定性的（无 bash/网络副作用）——这些**必须不同**。要消灭的是**隐性漂移**：新增一个行为中间件只落工厂一处，评测**自动跟上**。细节见 [DDD §34.2](../ddd/03ddd.md)。
 
 ## 10.5 场景化数据集与并行
 
@@ -74,12 +73,12 @@ flowchart TD
 
 在线评测的提速也在这里：用例彼此独立、且是**网络 I/O 密集**，直接用线程池（`EVAL_PARALLEL`）并发跑——**不需要**把 Agent 核心改 async（那是 [P18](../ddd/03ddd.md)），二者正交。细节见 [DDD §34.1/§34.3/§34.4](../ddd/03ddd.md)。
 
-## 10.6 让评测集自己长出来：在线录制
+## 10.6 让评测集自己长出来：在线录制与离线日志
 
-手写多轮 cassette（逐字填准 `tool_calls` 参数 + `usage`）既烦又易错。于是补上回放的**写侧对偶**——在真实会话里一键录制：
+手写多轮 cassette（逐字填准 `tool_calls` 参数 + `usage`）既烦又易错。于是有两条把真实会话变成用例的路径，都产出 cassette 一行 + **case 桩**一行（按 `name` 配对）：
 
-- [`RecordMiddleware`](../../src/middleware/record.py)（`ReplayLLMClient` 的写侧对偶）：`after_model` 采集完整 `AIMessage`+`usage`，`on_session_end` 落 cassette 一行 + **case 桩**一行。
-- CLI 命令 `:cassette <场景>` 开始、再 `:cassette` 结束（默认关，与 `:trace`/`:stream` 同源；REPL 改句柄、中间件读句柄，跨层零 import）。
+- **在线录制**——[`RecordMiddleware`](../../src/middleware/record.py)（`ReplayLLMClient` 的写侧对偶）：`after_model` 采集完整 `AIMessage`+`usage`，`on_session_end` 落盘。CLI 命令 `:cassette <场景>` 开始、再 `:cassette` 结束（默认关，与 `:trace`/`:stream` 同源；REPL 改句柄、中间件读句柄，跨层零 import）。
+- **离线日志**——[`eval/loader.py`](../../eval/loader.py)（`make eval-case`）：解析已落盘的 `log/*.jsonl`，按 `user` 事件切 run，把任意真实会话日志离线转成用例（场景按日期命名），与在线录制并存。它是纯离线工具，**不被评测跑用例的路径 import**。
 
 > **边界：录「发生了什么」，但「应该发生什么」要人写**。录制能自动抓 `input` 与**观测到的** `tool_sequence` 作起点，但 `answer_contains`/`must_not_call` 等断言是**判断**，需你改定。另外录制会**真实执行工具**（有副作用）。细节见 [DDD §35](../ddd/03ddd.md)。
 
@@ -87,21 +86,22 @@ flowchart TD
 
 ```mermaid
 flowchart LR
-    obs["①可观测<br/>机读轨迹(数据源)"] --> rec["④在线录制<br/>长出用例"]
+    obs["①可观测<br/>机读运行日志(数据源)"] --> rec["④录制/离线日志<br/>长出用例"]
     rec --> replay["②录制回放<br/>CI 守编排骨架"]
     obs --> replay
     obs --> online["③在线打分<br/>看模型真实效果"]
     replay & online --> safe["敢动刀重构<br/>(异步/并行/缓存/记忆)"]
 ```
 
-一句话：**可观测是地基，录制-回放是安全网，在线打分是体检，录制是评测集自我繁殖的方式**。它们合起来，正是把 [09 §9.6](09-limitation-and-evolution.md) 那条「无评测集与回归 / trace 不持久化」的真实欠缺补上的落点——也是 [DDD §27 起](../ddd/03ddd.md)那些会改变 Agent 行为的重构（异步化、并行、缓存、压缩、分层记忆）**敢动刀的底气**。
+一句话：**可观测是地基，录制-回放是安全网，在线打分是体检，录制是评测集自我繁殖的方式**。它们合起来，正是把 [09 §9.6](09-limitation-and-evolution.md) 那条「无评测集与回归 / 运行日志不持久化」的真实欠缺补上的落点——也是 [DDD §27 起](../ddd/03ddd.md)那些会改变 Agent 行为的重构（异步化、并行、缓存、压缩、分层记忆）**敢动刀的底气**。
 
 | 入口 | 作用 |
 |---|---|
 | `make eval` | 离线录制回放，确定性，进 CI 闸门 |
 | `make eval-online` | 真实 API 对 case 打分，软指标比在线基线 |
 | `make eval-live` | `@slow` 真实 API 冒烟，验证「通不通」 |
-| `:cassette <场景>` | CLI 里录制真实会话为 cassette + case 桩 |
+| `make eval-case` | 从 `log/*.jsonl` 离线生成 case + cassette（场景按日期） |
+| `:cassette <场景>` | CLI 里在线录制真实会话为 cassette + case 桩 |
 
 ---
 

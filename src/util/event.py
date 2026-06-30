@@ -1,4 +1,4 @@
-"""生命周期事件的文本格式化 event.py：TraceMiddleware 与 LogMiddleware 共用，避免重复。
+"""生命周期事件的文本格式化 event.py：供 TraceMiddleware 输出人读执行日志（stdout 调试）。
 
 返回「事件正文」，不含线程/步数等前缀；各中间件自行加前缀并决定落点（stdout / 文件）。
 """
