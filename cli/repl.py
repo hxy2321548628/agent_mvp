@@ -5,17 +5,18 @@
 
 from collections.abc import Callable
 from dataclasses import dataclass
+from uuid import uuid4
 
 from rich.console import Console
 
 from cli.command import parse_command
-from cli.config import APPROVE_PROMPT, DEFAULT_THREAD, GOODBYE, HELP, PROMPT, WELCOME
+from cli.config import APPROVE_PROMPT, GOODBYE, HELP, NEW_SESSION_TITLE, PROMPT, SESSION_PREVIEW_MAXLEN, WELCOME
 from cli.render import Renderer
 from src.agent import Agent
 from src.middleware.record import RecordControl
-from src.schema.message import ToolCall
+from src.schema.message import HumanMessage, ToolCall
 from src.schema.state import Event
-from src.session.manager import SessionManager
+from src.session.manager import SessionManager, SessionPreview
 
 
 @dataclass
@@ -66,7 +67,7 @@ class Repl:
         toggles: Toggles,
         out: Callable[[str], None] = print,
         render: Callable[[Event], None] | None = None,
-        default_thread: str = DEFAULT_THREAD,
+        default_thread: str | None = None,
         record: RecordControl | None = None,
     ) -> None:
         self._agent = agent
@@ -75,10 +76,9 @@ class Repl:
         self._out = out
         self._render = render or Renderer().render
         self._record = record or RecordControl()
-        self._thread = default_thread
-        self._counter = 1
+        self._thread = default_thread or uuid4().hex  # 默认开新会话：分配 uuid（不复用人工命名的 thread）
         self.running = True
-        self._session.get_or_create(default_thread)  # 预登记默认窗口，便于 :list 即时可见
+        self._session.get_or_create(self._thread)  # 预登记当前会话（空会话不落盘，仅在内存可见）
 
     def handle(self, line: str) -> str:
         """处理一行输入：分派 → 展示 → 返回结果文本（供测试与 say 复用）。"""
@@ -86,7 +86,7 @@ class Repl:
         dispatch = {
             "say": self._say,
             "new": self._new,
-            "switch": self._switch,
+            "resume": self._resume,
             "list": self._list,
             "trace": self._trace,
             "stream": self._stream,
@@ -112,27 +112,49 @@ class Repl:
         return ""
 
     def _new(self, arg: str) -> str:
-        if arg:
-            thread = arg
-        else:
-            self._counter += 1
-            thread = f"w{self._counter}"
-        self._thread = thread
-        self._session.get_or_create(thread)
-        return f"已开新窗口并切换：{thread}"
+        self._thread = uuid4().hex  # 自动分配 uuid（不接受人工命名）
+        self._session.get_or_create(self._thread)
+        return "已开新会话并切换。"
 
-    def _switch(self, arg: str) -> str:
-        if not arg:
-            return "用法：:switch <窗口id>"
-        self._thread = arg
-        self._session.get_or_create(arg)
-        return f"已切换到窗口：{arg}"
+    def _resume(self, arg: str) -> str:
+        entries = self._entries()
+        text = arg.strip()
+        if not text:  # 无参：列出可恢复会话当选单
+            return "可恢复会话（用 :resume <序号> 恢复）：\n" + self._format_entries(entries)
+        if not text.isdigit():
+            return "用法：:resume <序号>（序号见 :list）"
+        index = int(text)
+        if not 1 <= index <= len(entries):
+            return f"序号超出范围：1–{len(entries)}"
+        target = entries[index - 1]
+        self._thread = target.thread_id
+        self._session.get_or_create(target.thread_id)
+        return f"已恢复会话：{self._title(target)}"
 
     def _list(self, arg: str) -> str:
-        threads = self._session.list_threads()
-        if not threads:
-            return "（暂无窗口）"
-        return "窗口：" + "  ".join(f"*{t}" if t == self._thread else t for t in threads)
+        return "会话：\n" + self._format_entries(self._entries())
+
+    def _entries(self) -> list[SessionPreview]:
+        """已有会话摘要 + 确保当前会话在列（新会话尚未落盘，previews 看不到，需补入）。"""
+        entries = self._session.previews()
+        if all(entry.thread_id != self._thread for entry in entries):
+            state = self._session.get_or_create(self._thread)
+            title = next((m.content for m in state.messages if isinstance(m, HumanMessage)), "")
+            entries = [SessionPreview(self._thread, state.created_at, title), *entries]
+        return entries
+
+    def _format_entries(self, entries: list[SessionPreview]) -> str:
+        """按「序号 + 首句 + 时间」逐行渲染，* 标记当前；不展示 thread_id（uuid）。"""
+        lines = []
+        for index, entry in enumerate(entries, 1):
+            mark = "*" if entry.thread_id == self._thread else " "
+            lines.append(f"{mark}[{index}] {self._title(entry)}  {entry.created_at}")
+        return "\n".join(lines)
+
+    @staticmethod
+    def _title(entry: SessionPreview) -> str:
+        """会话标题：首条用户消息截断；无则占位。"""
+        return (entry.title or NEW_SESSION_TITLE)[:SESSION_PREVIEW_MAXLEN]
 
     def _trace(self, arg: str) -> str:
         self._toggles.trace_on = not self._toggles.trace_on

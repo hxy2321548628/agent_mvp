@@ -28,3 +28,5 @@ trace/
 eval/run/
 eval/case
 eval/cassette
+
+.session

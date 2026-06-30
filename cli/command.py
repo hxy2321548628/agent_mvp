@@ -6,10 +6,10 @@ from typing import Literal
 from cli.config import COMMAND_PREFIX
 
 
-CommandKind = Literal["new", "switch", "list", "trace", "stream", "think", "cassette", "quit", "help", "say", "unknown"]
+CommandKind = Literal["new", "resume", "list", "trace", "stream", "think", "cassette", "quit", "help", "say", "unknown"]
 _NAMED: dict[str, CommandKind] = {
     "new": "new",
-    "switch": "switch",
+    "resume": "resume",
     "list": "list",
     "trace": "trace",
     "stream": "stream",

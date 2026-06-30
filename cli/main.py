@@ -8,11 +8,11 @@
 from cli.repl import Repl, Toggles, ToolApproval, make_trace_sink
 from eval.config import EVAL_CASE_DIR, EVAL_CASSETTE_DIR
 from src.agent import Agent
-from src.config import STREAM, Settings
+from src.config import SESSION_DIR, STREAM, Settings
 from src.llm.deepseek_client import DeepSeekClient
 from src.middleware.record import RecordControl
 from src.runtime import AgentRuntime
-from src.session.checkpointer import InMemoryCheckpointer
+from src.session.file_checkpointer import FileCheckpointer
 from src.session.manager import SessionManager
 from src.tool.bash import BashTool
 from src.tool.calculator import CalculatorTool
@@ -63,7 +63,7 @@ def build_agent(settings: Settings, toggles: Toggles, record: RecordControl) -> 
         case_dir=EVAL_CASE_DIR,
     )
     runtime = AgentRuntime(llm=llm, registry=registry, middlewares=middlewares, settings=settings)
-    session = SessionManager(InMemoryCheckpointer())
+    session = SessionManager(FileCheckpointer(SESSION_DIR))
     return Agent(runtime=runtime, session=session, registry=registry), session
 
 

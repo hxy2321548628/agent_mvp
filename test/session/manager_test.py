@@ -1,6 +1,6 @@
-"""session/manager 模块测试：get_or_create 隔离、save 落盘、list_threads。"""
+"""session/manager 模块测试：get_or_create 隔离、save 落盘、list_threads、previews。"""
 
-from src.schema.message import HumanMessage
+from src.schema.message import AIMessage, HumanMessage, SystemMessage
 from src.session.checkpointer import InMemoryCheckpointer
 from src.session.manager import SessionManager
 
@@ -54,3 +54,22 @@ def test_list_threads_reflects_created_windows() -> None:
     mgr.get_or_create("w1")
     mgr.get_or_create("w2")
     assert mgr.list_threads() == ["w1", "w2"]
+
+
+def test_previews_uses_first_user_message_as_title() -> None:
+    """previews 以首条用户消息作标题（跳过钉住前缀等非用户消息），并带 thread_id 与 created_at。"""
+    mgr = _manager()
+    state = mgr.get_or_create("w1")
+    state.messages += [SystemMessage(content="前缀", pinned=True), HumanMessage(content="北京天气如何"), AIMessage(content="晴")]
+    mgr.save(state)
+    [preview] = mgr.previews()
+    assert preview.thread_id == "w1"
+    assert preview.title == "北京天气如何"
+    assert preview.created_at == state.created_at
+
+
+def test_previews_empty_title_when_no_user_message() -> None:
+    """无用户消息的会话标题为空串（不报错）。"""
+    mgr = _manager()
+    mgr.get_or_create("w1")
+    assert mgr.previews()[0].title == ""

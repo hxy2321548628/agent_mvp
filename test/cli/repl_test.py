@@ -56,37 +56,63 @@ def _repl(
     return repl, session, toggles
 
 
-def test_windows_are_isolated() -> None:
-    """两个窗口的历史互不可见。"""
+def test_sessions_are_isolated() -> None:
+    """两个会话（各自 uuid）的历史互不可见；:new 切到全新 uuid。"""
     repl, session, _ = _repl()
     repl.handle("hello 1")
+    t1 = repl._thread
     repl.handle(":new")
+    t2 = repl._thread
     repl.handle("hello 2")
-    w1 = [m.content for m in session.get_or_create("w1").messages]
-    w2 = [m.content for m in session.get_or_create("w2").messages]
-    assert "hello 1" in w1 and "hello 1" not in w2
-    assert "hello 2" in w2 and "hello 2" not in w1
+    assert t1 != t2
+    s1 = [m.content for m in session.get_or_create(t1).messages]
+    s2 = [m.content for m in session.get_or_create(t2).messages]
+    assert "hello 1" in s1 and "hello 1" not in s2
+    assert "hello 2" in s2 and "hello 2" not in s1
 
 
-def test_switch_back_resumes_window() -> None:
-    """:switch 回到旧窗口后，输入追加到该窗口。"""
+def test_resume_by_index_switches_back_to_session() -> None:
+    """:resume <序号> 回到旧会话后，输入追加到该会话。"""
     repl, session, _ = _repl()
     repl.handle("first")
-    repl.handle(":new w2")
+    t1 = repl._thread
+    repl.handle(":new")
     repl.handle("second")
-    repl.handle(":switch w1")
+    repl.handle(":resume 1")  # 序号 1 = 最先创建的会话（previews 插入序）
+    assert repl._thread == t1
     repl.handle("third")
-    w1 = [m.content for m in session.get_or_create("w1").messages]
-    assert "first" in w1 and "third" in w1 and "second" not in w1
+    s1 = [m.content for m in session.get_or_create(t1).messages]
+    assert "first" in s1 and "third" in s1 and "second" not in s1
 
 
-def test_list_shows_windows_and_marks_current() -> None:
-    """:list 列出窗口并标记当前。"""
+def test_list_shows_titles_marks_current_and_hides_uuid() -> None:
+    """:list 用首句而非 uuid 展示，并以 * 标记当前会话。"""
     repl, _, _ = _repl()
-    repl.handle(":new w2")
+    repl.handle("北京天气如何")
+    repl.handle(":new")
+    repl.handle("上海天气如何")
+    current = repl._thread
     listing = repl.handle(":list")
-    assert "w1" in listing and "w2" in listing
-    assert "*w2" in listing
+    assert "北京天气如何" in listing and "上海天气如何" in listing
+    assert "*" in listing
+    assert current not in listing  # 不暴露 uuid
+
+
+def test_resume_without_arg_lists_resumable_sessions() -> None:
+    """:resume 无参数时列出可恢复会话当选单（不切换）。"""
+    repl, _, _ = _repl()
+    repl.handle("第一个问题")
+    before = repl._thread
+    listing = repl.handle(":resume")
+    assert "第一个问题" in listing
+    assert repl._thread == before  # 仅列出、不切换
+
+
+def test_resume_out_of_range_reports_error() -> None:
+    """:resume 序号越界给出范围提示而非崩溃。"""
+    repl, _, _ = _repl()
+    repl.handle("only one")
+    assert "超出范围" in repl.handle(":resume 9")
 
 
 def test_trace_toggle_flips_flag() -> None:

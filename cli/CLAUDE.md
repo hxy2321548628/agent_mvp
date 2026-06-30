@@ -7,20 +7,21 @@ Design: see @doc/ddd/01ddd.md §12.
 ## Responsibility
 
 - **Compose & inject**: instantiate the concrete dependencies (`DeepSeekClient`,
-  `ToolRegistry` + tools, `InMemoryCheckpointer`, the middleware list) and inject them
+  `ToolRegistry` + tools, `FileCheckpointer`, the middleware list) and inject them
   into `Agent`. Business logic stays in `src/` — do not put runtime / tool / middleware
   logic here.
 - **Terminal I/O**: read user input, render output; stream tokens live via `on_token=print`.
-- **Session UX**: map terminal "windows" to `thread_id`s so the user can run and switch
-  between independent sessions.
+- **Session UX**: each session is a `thread_id` (a `uuid4`, persisted by `FileCheckpointer`).
+  Startup opens a fresh session by default; `:resume <n>` loads an existing one. Sessions are
+  shown by their first user message (`SessionManager.previews()`), never by raw uuid.
 
 ## REPL Commands
 
 | Command | Effect |
 |---|---|
-| `:new` | open a new window (fresh `thread_id`) |
-| `:switch <id>` | switch the active window |
-| `:list` | list existing windows |
+| `:new` | open a new session (auto-assigned `uuid4`) |
+| `:list` | list all sessions (index + first message + time, `*` marks current) |
+| `:resume [n]` | no arg: list resumable sessions; with index `n` (from `:list`): switch to it |
 | `:trace` | toggle tool / execution trace logging |
 | `:stream` | toggle streaming output |
 | `:cassette <scenario>` | start recording the session as eval cassette + case stub (run again to stop; default off) |

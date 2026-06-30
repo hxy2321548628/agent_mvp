@@ -4,7 +4,7 @@
 （content vs tool_calls），对应题目"提取思考过程、工具调用或最终答案"。
 """
 
-from typing import Literal
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, Field
 
@@ -28,7 +28,9 @@ class SystemMessage(Message):
     """系统消息：角色设定 / 提醒注入。"""
 
     role: Literal["system"] = "system"
-    pinned: bool = False  # 钉住前缀：True 的前导 SystemMessage 不被压缩摘要、会话开始时幂等重注入
+    pinned: bool = (
+        False  # 钉住前缀：True 的前导 SystemMessage 不被压缩摘要、会话开始时幂等重注入
+    )
 
 
 class HumanMessage(Message):
@@ -41,7 +43,9 @@ class AIMessage(Message):
     """LLM 输出：content=最终答案文本；reasoning_content=DeepSeek 原生推理块；tool_calls=工具调用意图。"""
 
     role: Literal["assistant"] = "assistant"
-    reasoning_content: str = ""  # 思考过程（仅推理模式非空）；带 tool_calls 的轮需回传，否则端点 400
+    reasoning_content: str = (
+        ""  # 思考过程（仅推理模式非空）；带 tool_calls 的轮需回传，否则端点 400
+    )
     tool_calls: list[ToolCall] = Field(default_factory=list)
 
 
@@ -51,3 +55,10 @@ class ToolMessage(Message):
     role: Literal["tool"] = "tool"
     tool_call_id: str  # 对应 ToolCall.id
     is_error: bool = False
+
+
+# 按 role 的判别联合：JSON 往返（持久化）时据此还原各子类型，避免退化成基类 Message 丢字段。
+AnyMessage = Annotated[
+    SystemMessage | HumanMessage | AIMessage | ToolMessage,
+    Field(discriminator="role"),  # 根据 role 进行区别
+]

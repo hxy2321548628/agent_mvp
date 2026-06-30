@@ -91,9 +91,10 @@ flowchart TD
 | 项 | 内容 |
 |---|---|
 | 目标 | 会话状态从进程内 dict 升级为**本地 JSONL 持久化**，进程退出不丢；解决 JSON 往返丢 `Message` 子类型的坑（[04 §4.4](../agent-design/04-data-model-and-session.md)）|
-| 任务 | `message.py`：给 `Message` 子类做 **pydantic 判别联合**（按 `role` 加 `discriminator`，反序列化还原 Human/AI/Tool/System）；新增 `session/file_checkpointer.py`（实现已有 `Checkpointer` 协议：**项目路径转义**做目录名 + **每 thread 一份 JSONL 追加写**，借鉴 Claude Code 的 `~/.claude/projects/<转义cwd>/<session>.jsonl`——是可逆转义非哈希，崩溃安全、无需整文件重写）；组合根把 `InMemoryCheckpointer` 换注入 `FileCheckpointer`；`config.py`：`SESSION_DIR`（见 [DDD3 §27](../ddd/03ddd.md)）|
-| 先写的测试 | 判别联合：含 tool_calls 的 AIMessage / ToolMessage / pinned System 各自往返**类型不丢**；`FileCheckpointer.put→get` 还原完整历史；追加写不重写整文件；`list_threads` 列出磁盘已有；进程重启（新实例读同目录）历史仍在 |
-| 完成标准 | 重启 CLI 后旧窗口历史可续；评测集（P16）对持久化前后零行为回归 |
+| 任务 | `message.py`：给 `Message` 子类做 **pydantic 判别联合** `AnyMessage`（按 `role` 加 `discriminator`，反序列化还原 Human/AI/Tool/System），`AgentState.messages` 用之；新增 `session/file_checkpointer.py`（实现已有 `Checkpointer` 协议：**扁平项目本地目录** `<SESSION_DIR>/<thread_id>.jsonl`——`.session` 已在项目内且 gitignore，本身即项目隔离，故**不做路径转义**；首行 meta + **每条「非钉住」消息一行追加写**，崩溃安全、不重写整文件；**钉住前缀不入盘**——由 `SessionPrefix` 每轮重注入，存它只会过期；空会话不落盘）；`SessionManager.previews()` 出 `(thread_id, created_at, 首条用户消息)` 供 CLI 展示；组合根把 `InMemoryCheckpointer` 换注入 `FileCheckpointer`；`config.py`：`SESSION_DIR`；CLI：`thread_id` 改 **uuid4**（取代 `w1` 计数），`:switch`→`:resume`（按 `:list` 序号恢复）、`:list`/`:resume` 以**首句**展示不暴露 uuid（见 [DDD3 §32](../ddd/03ddd.md)）|
+| 先写的测试 | 判别联合：含 tool_calls 的 AIMessage / ToolMessage / pinned System 各自往返**类型不丢**；`FileCheckpointer.put→get` 还原完整历史；追加写不重写整文件；钉住前缀不入盘、非钉住 System 保留；空会话不落盘；`list_threads` 列出磁盘已有；进程重启（新实例读同目录）历史仍在；`previews` 取首句为标题；CLI 会话按 uuid 隔离、`:resume <序号>` 切回、`:list` 以首句展示不露 uuid |
+| 完成标准 | 重启 CLI 后旧会话历史可 `:resume` 续上；评测集（P16）对持久化前后零行为回归（eval 自带隔离态、不接 `FileCheckpointer`）|
+| 已知边界 | 破坏性压缩（`ContextMiddleware`，≥`MAX_MSG` 触发）与追加写的协调留到 P20「非破坏压缩、完整 transcript 落盘」（[§29](../ddd/03ddd.md)）；P17 会话普遍在阈值内，磁盘 JSONL 即完整历史 |
 
 ### P18 — src 异步核心化｜R13（边界隔离消费，无染色之痛）
 

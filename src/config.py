@@ -18,6 +18,7 @@ BASH_TIMEOUT = 30  # bash 工具单条命令执行超时秒数
 FETCH_TIMEOUT = 15  # fetch 工具 HTTP 请求超时秒数
 LOG_DIR = "log"  # 结构化运行日志根目录（每会话一份机读 JSONL，LogMiddleware 落盘）
 LOG_NAME_MAXLEN = 20  # 日志文件名里首句截断的最大字符数
+SESSION_DIR = ".session"  # 会话持久化根目录（每 thread 一份 JSONL，FileCheckpointer 落盘）
 MODEL_PRICE = {DEFAULT_MODEL: {"input": 0.14, "output": 0.28}}  # 每百万 token 美元单价（成本估算，占位值可调）
 # bash 命令命中以下任一正则即需 HITL 授权（破坏/重定向/提权/远端推送等，ApprovalMiddleware 用）
 DANGER_PATTERN = [

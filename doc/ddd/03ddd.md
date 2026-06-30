@@ -255,7 +255,7 @@ flowchart TD
 - `llm/base.py`：`chat` 改 `async` 并回传 `usage`；新增 `RouterLLMClient`、`ReplayLLMClient`。
 - `middleware/base.py`：8 个钩子全改 `async`。
 - `tool/base.py`：`execute` 改 `async`。
-- `session/`：新增 `FileCheckpointer`（JSONL + 路径转义 + 每 thread `asyncio.Lock`）。
+- `session/`：新增 `FileCheckpointer`（每 thread 一份 JSONL：**扁平项目本地目录**、首行 meta + 非钉住消息追加写、钉住前缀不入盘、空会话不落盘；P17 落地，[P18/§27] 再加每 thread `asyncio.Lock`）；`SessionManager.previews()` 供客户端按首句展示。CLI `thread_id` 用 uuid4、`:resume` 按序号恢复。
 - 新增包：`memory/`（项目级分层记忆）、`eval/`（评测）、`middleware/observe.py`。
 - `config.py` 增量：`TRACE_DIR`、`MODEL_PRICE`、`EVAL_DIR`/`EVAL_CASE_DIR`/`EVAL_BASELINE`、`SESSION_DIR`、`PARALLEL_TOOL`/`PARALLEL_TOOL_MAX`、`TOKEN_BUDGET`/`COMPRESS_KEEP_TOKEN`、`MODEL_TIER`/`ROUTE_RULE`、`MEMORY_DIR`/`RECALL_TOP_K`/`EMBED_MODEL`。
 

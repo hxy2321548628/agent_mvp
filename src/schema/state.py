@@ -9,7 +9,7 @@ from uuid import uuid4
 from pydantic import BaseModel, Field
 
 from src.llm.base import Usage
-from src.schema.message import Message, ToolCall, ToolMessage
+from src.schema.message import AnyMessage, ToolCall, ToolMessage
 
 
 # —— 顶层参数 ——
@@ -35,7 +35,7 @@ class AgentState(BaseModel):
 
     thread_id: str
     created_at: str = Field(default_factory=lambda: datetime.now().strftime(CREATED_AT_FORMAT))
-    messages: list[Message] = Field(default_factory=list)
+    messages: list[AnyMessage] = Field(default_factory=list)
 
 
 RunEventKind = Literal["user", "model", "tool_result"]  # 运行事件三类

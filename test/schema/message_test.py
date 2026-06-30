@@ -1,13 +1,24 @@
 """message 模块测试：各消息类型可构造、字段语义正确。"""
 
+from pydantic import TypeAdapter
+
 from src.schema.message import (
     AIMessage,
+    AnyMessage,
     HumanMessage,
     Message,
     SystemMessage,
     ToolCall,
     ToolMessage,
 )
+
+
+_ADAPTER = TypeAdapter(AnyMessage)
+
+
+def _roundtrip(msg: Message) -> Message:
+    """经 JSON 文本序列化再反序列化（判别联合），模拟持久化的存→取一圈。"""
+    return _ADAPTER.validate_json(msg.model_dump_json())
 
 
 def test_tool_call_carries_id_name_and_arguments() -> None:
@@ -57,3 +68,35 @@ def test_messages_are_message_subclasses() -> None:
         ToolMessage(content="d", tool_call_id="c1"),
     ]
     assert all(isinstance(msg, Message) for msg in messages)
+
+
+def test_ai_message_with_tool_calls_roundtrips_without_type_loss() -> None:
+    """带 tool_calls 的 AIMessage 经 JSON 往返仍是 AIMessage，tool_calls 完整保留。"""
+    ai = AIMessage(content="", reasoning_content="先算一下", tool_calls=[ToolCall(id="c1", name="calculator", arguments={"expression": "1+1"})])
+    back = _roundtrip(ai)
+    assert isinstance(back, AIMessage)
+    assert back.reasoning_content == "先算一下"
+    assert back.tool_calls[0].name == "calculator"
+    assert back.tool_calls[0].arguments == {"expression": "1+1"}
+
+
+def test_tool_message_roundtrips_without_type_loss() -> None:
+    """ToolMessage 经 JSON 往返仍是 ToolMessage，tool_call_id 与 is_error 保留。"""
+    back = _roundtrip(ToolMessage(content="boom", tool_call_id="c2", is_error=True))
+    assert isinstance(back, ToolMessage)
+    assert back.tool_call_id == "c2"
+    assert back.is_error is True
+
+
+def test_pinned_system_message_roundtrips_without_type_loss() -> None:
+    """pinned=True 的 SystemMessage 经 JSON 往返仍是 SystemMessage 且 pinned 保留。"""
+    back = _roundtrip(SystemMessage(content="角色设定", pinned=True))
+    assert isinstance(back, SystemMessage)
+    assert back.pinned is True
+
+
+def test_human_message_roundtrips_without_type_loss() -> None:
+    """HumanMessage 经 JSON 往返仍是 HumanMessage（不退化成基类）。"""
+    back = _roundtrip(HumanMessage(content="你好"))
+    assert isinstance(back, HumanMessage)
+    assert back.content == "你好"

@@ -7,13 +7,13 @@ def test_parse_plain_text_is_say() -> None:
     assert parse_command("hello world") == Command("say", "hello world")
 
 
-def test_parse_new_with_and_without_arg() -> None:
+def test_parse_new_and_resume() -> None:
     assert parse_command(":new") == Command("new", "")
-    assert parse_command(":new w9") == Command("new", "w9")
+    assert parse_command(":resume") == Command("resume", "")
+    assert parse_command(":resume 2") == Command("resume", "2")
 
 
-def test_parse_switch_and_list_and_toggles() -> None:
-    assert parse_command(":switch w2") == Command("switch", "w2")
+def test_parse_list_and_toggles() -> None:
     assert parse_command(":list") == Command("list", "")
     assert parse_command(":trace") == Command("trace", "")
     assert parse_command(":stream") == Command("stream", "")

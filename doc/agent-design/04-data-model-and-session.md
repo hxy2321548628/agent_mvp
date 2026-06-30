@@ -76,6 +76,18 @@ class Checkpointer(Protocol):
 
 > 内存实现有个刻意的细节：**直接存对象、不做 JSON 往返**。因为 JSON 序列化会丢掉 `Message` 的子类型（System/Human/AI/Tool 退化成普通 dict）。换持久化实现时，这正是要小心处理的点。
 
+### FileCheckpointer：本地 JSONL 持久化（P17）
+
+[file_checkpointer.py](../../src/session/file_checkpointer.py) 是 `Checkpointer` 协议的落盘实现，进程退出不丢历史。三个关键决定：
+
+- **判别联合解上面那个坑**：[message.py](../../src/schema/message.py) 给四个子类按 `role` 做 pydantic 判别联合 `AnyMessage`，`AgentState.messages` 用它——反序列化时据 `role` 还原回 Human/AI/Tool/System，不再退化成基类。
+- **每 thread 一份 JSONL、追加写**：`<SESSION_DIR>/<thread_id>.jsonl`，首行 meta（`thread_id`/`created_at`），其后每条消息一行。新消息**追加**而非重写整文件——崩溃安全、O(1) 落盘。`.session` 已在项目内且 gitignore，本身即项目隔离，故**扁平存放、不做路径转义**。
+- **钉住前缀不入盘**：前缀是 `SessionPrefix` 每轮从系统提示/环境/todo 派生重注入的（见 §4.3），存它只会过期；故只持久化「非钉住」消息，载入后下一轮 `on_session_start` 自会重注入。排除前缀后，真实对话在正常情况下纯尾部增长，追加偏移成立。
+
+> 破坏性压缩（`ContextMiddleware`，≥`MAX_MSG` 触发）会重写 `messages`，与纯追加相悖；其协调留到 P20「非破坏压缩、完整 transcript 落盘」。P17 阶段会话普遍在阈值内，磁盘 JSONL 即完整历史。
+
+> CLI 侧：`thread_id` 是 `uuid4`，启动默认开新会话、`:resume <序号>` 恢复旧会话，列表用 `SessionManager.previews()` 的**首句**展示而非 uuid。
+
 ### SessionManager：隔离与持久化的唯一负责方
 
 [manager.py](../../src/session/manager.py) 是「会话状态」的唯一出入口：
