@@ -26,3 +26,5 @@ tmp/
 # Runtime structured traces (ObserveMiddleware / eval replay)
 trace/
 eval/run/
+eval/case
+eval/cassette
